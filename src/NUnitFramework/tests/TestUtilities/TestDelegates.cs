@@ -32,6 +32,11 @@ namespace NUnit.TestUtilities
             throw new ArgumentException("myMessage", "myParam");
         }
 
+        public static void ThrowsArgumentNullException()
+        {
+            throw new ArgumentNullException("myParam", "myMessage");
+        }
+
         public static void ThrowsNullReferenceException()
         {
             throw new NullReferenceException("my message");
@@ -54,6 +59,11 @@ namespace NUnit.TestUtilities
         public static void ThrowsDerivedException()
         {
             throw new DerivedException();
+        }
+
+        public static int ThrowsInsteadOfReturns()
+        {
+            throw new Exception("my message");
         }
 
         public class BaseException : Exception

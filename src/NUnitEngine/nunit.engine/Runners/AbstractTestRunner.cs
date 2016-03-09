@@ -22,14 +22,11 @@
 // ***********************************************************************
 
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Xml;
+using NUnit.Engine.Services;
 
 namespace NUnit.Engine.Runners
 {
-    using Internal;
-
     /// <summary>
     /// AbstractTestRunner is the base class for all runners
     /// within the NUnit Engine. It implements the ITestRunner
@@ -41,10 +38,12 @@ namespace NUnit.Engine.Runners
     {
         protected const string TEST_RUN_ELEMENT = "test-run";
 
-        public AbstractTestRunner(ServiceContext services, TestPackage package)
+        public AbstractTestRunner(IServiceLocator services, TestPackage package)
         {
-            this.Services = services;
-            this.TestPackage = package;
+            Services = services;
+            TestPackage = package;
+            TestRunnerFactory = Services.GetService<ITestRunnerFactory>();
+            ProjectService = Services.GetService<IProjectService>();
         }
 
         #region Properties
@@ -52,7 +51,11 @@ namespace NUnit.Engine.Runners
         /// <summary>
         /// Our Service Context
         /// </summary>
-        protected ServiceContext Services { get; private set; }
+        protected IServiceLocator Services { get; private set; }
+
+        protected IProjectService ProjectService { get; private set; }
+
+        protected ITestRunnerFactory TestRunnerFactory { get; private set; }
 
         /// <summary>
         /// The TestPackage for which this is the runner
@@ -130,13 +133,22 @@ namespace NUnit.Engine.Runners
         /// </summary>
         /// <param name="listener">An ITestEventHandler to receive events</param>
         /// <param name="filter">A TestFilter used to select tests</param>
-        protected virtual void RunTestsAsynchronously(ITestEventListener listener, TestFilter filter)
+        /// <returns>An <see cref="AsyncTestEngineResult"/> that will provide the result of the test execution</returns>
+        protected virtual AsyncTestEngineResult RunTestsAsync(ITestEventListener listener, TestFilter filter)
         {
+            var testRun = new AsyncTestEngineResult();
+
             using (var worker = new BackgroundWorker())
             {
-                worker.DoWork += (s, ea) => RunTests(listener, filter);
+                worker.DoWork += (s, ea) =>
+                {
+                    var result = RunTests(listener, filter);
+                    testRun.SetResult(result);
+                };
                 worker.RunWorkerAsync();
             }
+
+            return testRun;
         }
 
         /// <summary>
@@ -144,12 +156,6 @@ namespace NUnit.Engine.Runners
         /// </summary>
         /// <param name="force">If true, cancel any ongoing test threads, otherwise wait for them to complete.</param>
         public abstract void StopRun(bool force);
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-                Unload();
-        }
 
         #endregion
 
@@ -227,6 +233,20 @@ namespace NUnit.Engine.Runners
         }
 
         /// <summary>
+        /// Start a run of the tests in the loaded TestPackage. The tests are run
+        /// asynchronously and the listener interface is notified as it progresses.
+        /// </summary>
+        /// <param name="listener">An ITestEventHandler to receive events</param>
+        /// <param name="filter">A TestFilter used to select tests</param>
+        /// <returns>An <see cref="AsyncTestEngineResult"/> that will provide the result of the test execution</returns>
+        public AsyncTestEngineResult RunAsync(ITestEventListener listener, TestFilter filter)
+        {
+            EnsurePackageIsLoaded();
+
+            return RunTestsAsync(listener, filter);
+        }
+        
+        /// <summary>
         /// Start a run of the tests in the TestPackage. The tests are run
         /// asynchronously and the listener interface is notified as it progresses.
         /// Loads the TestPackage if not already loaded.
@@ -235,9 +255,7 @@ namespace NUnit.Engine.Runners
         /// <param name="filter">A TestFilter used to select tests</param>
         public void StartRun(ITestEventListener listener, TestFilter filter)
         {
-            EnsurePackageIsLoaded();
-
-            RunTestsAsynchronously(listener, filter);
+            RunAsync(listener, filter);
         }
 
         #endregion
@@ -250,6 +268,19 @@ namespace NUnit.Engine.Runners
             GC.SuppressFinalize(this);
         }
 
+        protected bool _disposed = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                    Unload();
+
+                _disposed = true;
+            }
+        }
+
         #endregion
 
         #region Helper Methods
@@ -259,7 +290,7 @@ namespace NUnit.Engine.Runners
             return package != null
                 && package.FullName != null
                 && package.FullName != string.Empty
-                && Services.ProjectService.CanLoadFrom(package.FullName);
+                && ProjectService.CanLoadFrom(package.FullName);
         }
 
         private void EnsurePackageIsLoaded()

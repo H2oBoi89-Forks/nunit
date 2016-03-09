@@ -31,7 +31,7 @@ using NUnit.Core;
 namespace System.Runtime.CompilerServices
 {
     [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Method)]
-    public sealed class ExtensionAttribute : Attribute { }
+    sealed class ExtensionAttribute : Attribute { }
 }
 
 namespace NUnit.Engine.Drivers
@@ -46,7 +46,7 @@ namespace NUnit.Engine.Drivers
     //   4. output element
     //   5. totals are all set to 0 in the test-suite element
     // The last item can be corrected if we decide to, but it will require
-    // decending the tree to calculate the totals at each node.
+    // descending the tree to calculate the totals at each node.
 
     public static class XmlExtensions
     {
@@ -95,9 +95,11 @@ namespace NUnit.Engine.Drivers
 
             if (test.IsSuite)
                 thisNode.AddAttribute("type", test.TestType);
-            thisNode.AddAttribute("id", test.TestName.TestID.ToString());
-            thisNode.AddAttribute("name", Escape(test.TestName.Name));
-            thisNode.AddAttribute("fullname", Escape(test.TestName.FullName));
+
+            var tn = test.TestName;
+            thisNode.AddAttribute("id", string.Format("{0}-{1}", tn.RunnerID, tn.TestID));
+            thisNode.AddAttribute("name", tn.Name);
+            thisNode.AddAttribute("fullname", tn.FullName);
             thisNode.AddAttribute("runstate", test.RunState.ToString());
 
             if (test.IsSuite)
@@ -181,11 +183,20 @@ namespace NUnit.Engine.Drivers
                 else
                     properties.AddProperty(key, propValue);
             }
+
+            // Special handling for empty _CATEGORIES prop
+            // which is sometimes created by NUnit V2
+            if (properties.ChildNodes.Count == 0)
+                parent.RemoveChild(properties);
         }
 
         // Adds a property element and its contents
         private static void AddProperty(this XmlNode parent, string key, object val)
         {
+            if (parent == null)
+                throw new ArgumentNullException("parent");
+            if (val == null)
+                throw new ArgumentNullException("val");
             var node = parent.AddElement("property");
             node.AddAttribute("name", key);
             node.AddAttribute("value", val.ToString());
@@ -226,7 +237,7 @@ namespace NUnit.Engine.Drivers
         /// <param name="node">The node to which the element should be added.</param>
         /// <param name="name">The element name.</param>
         /// <returns>The newly created child element</returns>
-        private static XmlNode AddElement(this XmlNode node, string name)
+        public static XmlNode AddElement(this XmlNode node, string name)
         {
             XmlNode childNode = node.OwnerDocument.CreateElement(name);
             node.AppendChild(childNode);
@@ -251,17 +262,6 @@ namespace NUnit.Engine.Drivers
         #endregion
 
         #region Helper Methods
-
-        // Escapes a string for use in the XML
-        private static string Escape(string original)
-        {
-            return original
-                .Replace("&", "&amp;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&apos;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;");
-        }
 
         // Returns ResultState translated to a v3 string representation
         private static string GetTranslatedResultState(ResultState resultState)

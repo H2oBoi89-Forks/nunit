@@ -24,6 +24,7 @@
 using System;
 using System.Reflection;
 using NUnit.Framework;
+using NUnit.Framework.Compatibility;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal.Builders;
 using NUnit.Framework.Internal;
@@ -42,7 +43,7 @@ namespace NUnit.TestUtilities
 
         public static TestSuite MakeFixture(Type type)
         {
-            return (TestSuite)new DefaultSuiteBuilder().BuildFrom(type);
+            return (TestSuite)new DefaultSuiteBuilder().BuildFrom(new TypeWrapper(type));
         }
 
         public static TestSuite MakeFixture(object fixture)
@@ -54,7 +55,9 @@ namespace NUnit.TestUtilities
 
         public static TestSuite MakeParameterizedMethodSuite(Type type, string methodName)
         {
-            return (TestSuite)MakeTestFromMethod(type, methodName);
+            var suite = MakeTestFromMethod(type, methodName) as TestSuite;
+            Assert.NotNull(suite, "Unable to create parameterized suite - most likely there is no data provided");
+            return suite;
         }
 
         public static TestSuite MakeParameterizedMethodSuite(object fixture, string methodName)
@@ -79,10 +82,10 @@ namespace NUnit.TestUtilities
         // depending on whether the method takes arguments or not
         internal static Test MakeTestFromMethod(Type type, string methodName)
         {
-            MethodInfo method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (method == null)
                 Assert.Fail("Method not found: " + methodName);
-            return new DefaultTestCaseBuilder().BuildFrom(method);
+            return new DefaultTestCaseBuilder().BuildFrom(new MethodWrapper(type, method));
         }
 
         #endregion
@@ -105,7 +108,7 @@ namespace NUnit.TestUtilities
 
             object testObject = null;
             if (!IsStaticClass(type))
-                testObject = Activator.CreateInstance(type);
+                testObject = Reflect.Construct(type);
 
             return RunTestSuite(suite, testObject);
         }
@@ -121,9 +124,37 @@ namespace NUnit.TestUtilities
 
             // TODO: Replace with an event - but not while method is static
             while (work.State != WorkItemState.Complete)
+            {
+#if PORTABLE
+                System.Threading.Tasks.Task.Delay(1);
+#else
                 Thread.Sleep(1);
+#endif
+            }
 
             return work.Result;
+        }
+
+        public static CompositeWorkItem GenerateWorkItem(TestSuite suite, object testObject)
+        {
+            TestExecutionContext context = new TestExecutionContext();
+            context.TestObject = testObject;
+
+            CompositeWorkItem work = (CompositeWorkItem)WorkItem.CreateWorkItem(suite, TestFilter.Empty);
+            work.InitializeContext(context);
+            work.Execute();
+
+            // TODO: Replace with an event - but not while method is static
+            while (work.State != WorkItemState.Complete)
+            {
+#if PORTABLE
+                System.Threading.Tasks.Task.Delay(1);
+#else
+                Thread.Sleep(1);
+#endif
+            }
+
+            return work;
         }
 
         public static ITestResult RunTestCase(Type type, string methodName)
@@ -132,7 +163,7 @@ namespace NUnit.TestUtilities
 
             object testObject = null;
             if (!IsStaticClass(type))
-                testObject = Activator.CreateInstance(type);
+                testObject = Reflect.Construct(type);
 
             return RunTest(testMethod, testObject);
         }
@@ -181,16 +212,22 @@ namespace NUnit.TestUtilities
 
             // TODO: Replace with an event - but not while method is static
             while (work.State != WorkItemState.Complete)
+            {
+#if PORTABLE
+                System.Threading.Tasks.Task.Delay(1);
+#else
                 Thread.Sleep(1);
+#endif
+            }
 
             return work.Result;
         }
 
-        #endregion
+#endregion
 
         private static bool IsStaticClass(Type type)
         {
-            return type.IsAbstract && type.IsSealed;
+            return type.GetTypeInfo().IsAbstract && type.GetTypeInfo().IsSealed;
         }
 
         private TestBuilder() { }

@@ -31,31 +31,31 @@ namespace NUnit.Framework.Internal.Filters
     /// IdFilter selects tests based on their id
     /// </summary>
     [Serializable]
-    public class IdFilter : ValueMatchFilter<int>
+    public class IdFilter : ValueMatchFilter
     {
-        /// <summary>
-        /// Construct an empty IdFilter
-        /// </summary>
-        public IdFilter() { }
-
         /// <summary>
         /// Construct an IdFilter for a single value
         /// </summary>
         /// <param name="id">The id the filter will recognize.</param>
-        public IdFilter(int id) : base (id) { }
-
-        /// <summary>
-        /// Construct a IdFilter for multiple ids
-        /// </summary>
-        /// <param name="ids">The ids the filter will recognize.</param>
-        public IdFilter(IEnumerable<int> ids) : base(ids) { }
+        public IdFilter(string id) : base (id) { }
 
         /// <summary>
         /// Match a test against a single value.
         /// </summary>
-        protected override bool Match(ITest test, int id)
+        public override bool Match(ITest test)
         {
-            return test.Id == id;
+            // We make a direct test here rather than calling ValueMatchFilter.Match
+            // because regular expressions are not supported for ID.
+            return test.Id == ExpectedValue;
+        }
+
+        /// <summary>
+        /// Gets the element name
+        /// </summary>
+        /// <value>Element name</value>
+        protected override string ElementName
+        {
+            get { return "id"; }
         }
     }
 }

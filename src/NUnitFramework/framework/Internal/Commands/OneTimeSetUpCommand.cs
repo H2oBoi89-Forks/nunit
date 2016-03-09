@@ -23,7 +23,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Reflection;
+using NUnit.Framework.Interfaces;
 
 namespace NUnit.Framework.Internal.Commands
 {
@@ -34,13 +34,13 @@ namespace NUnit.Framework.Internal.Commands
     public class OneTimeSetUpCommand : TestCommand
     {
         private readonly TestSuite _suite;
-        private readonly Type _fixtureType;
+        private readonly ITypeInfo _typeInfo;
         private readonly object[] _arguments;
         private readonly List<SetUpTearDownItem> _setUpTearDown;
         private readonly List<TestActionItem> _actions;
 
         /// <summary>
-        /// Constructs a OneTimeSetUpComand for a suite
+        /// Constructs a OneTimeSetUpCommand for a suite
         /// </summary>
         /// <param name="suite">The suite to which the command applies</param>
         /// <param name="setUpTearDown">A SetUpTearDownList for use by the command</param>
@@ -49,7 +49,7 @@ namespace NUnit.Framework.Internal.Commands
             : base(suite) 
         {
             _suite = suite;
-            _fixtureType = suite.FixtureType;
+            _typeInfo = suite.TypeInfo;
             _arguments = suite.Arguments;
             _setUpTearDown = setUpTearDown;
             _actions = actions;
@@ -62,11 +62,18 @@ namespace NUnit.Framework.Internal.Commands
         /// <returns>A TestResult</returns>
         public override TestResult Execute(TestExecutionContext context)
         {
-            if (_fixtureType != null)
+            if (_typeInfo != null)
             {
                 // Use pre-constructed fixture if available, otherwise construct it
-                if (!IsStaticClass(_fixtureType))
-                    context.TestObject = _suite.Fixture ?? Reflect.Construct(_fixtureType, _arguments);
+                if (!_typeInfo.IsStaticClass)
+                {
+                    context.TestObject = _suite.Fixture ?? _typeInfo.Construct(_arguments);
+                    if (_suite.Fixture == null)
+                    {
+                        _suite.Fixture = context.TestObject;
+                    }
+                    Test.Fixture = _suite.Fixture;
+                }
 
                 for (int i = _setUpTearDown.Count; i > 0; )
                     _setUpTearDown[--i].RunSetUp(context);
@@ -77,11 +84,6 @@ namespace NUnit.Framework.Internal.Commands
                 _actions[i].BeforeTest(Test);
 
             return context.CurrentResult;
-        }
-
-        private static bool IsStaticClass(Type type)
-        {
-            return type.IsAbstract && type.IsSealed;
         }
     }
 }

@@ -24,13 +24,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using NUnit.Framework.Compatibility;
+using System.Reflection;
 
 namespace NUnit.Framework.Constraints
 {
+
     /// <summary>
     /// EqualityAdapter class handles all equality comparisons
-    /// that use an IEqualityComparer, IEqualityComparer&lt;T&gt;
-    /// or a ComparisonAdapter.
+    /// that use an <see cref="IEqualityComparer"/>, <see cref="IEqualityComparer{T}"/>
+    /// or a <see cref="ComparisonAdapter"/>.
     /// </summary>
     public abstract class EqualityAdapter
     {
@@ -57,7 +60,7 @@ namespace NUnit.Framework.Constraints
         #region Nested IComparer Adapter
 
         /// <summary>
-        /// Returns an EqualityAdapter that wraps an IComparer.
+        /// Returns an <see cref="EqualityAdapter"/> that wraps an <see cref="IComparer"/>.
         /// </summary>
         public static EqualityAdapter For(IComparer comparer)
         {
@@ -65,7 +68,7 @@ namespace NUnit.Framework.Constraints
         }
 
         /// <summary>
-        /// EqualityAdapter that wraps an IComparer.
+        /// <see cref="EqualityAdapter"/> that wraps an <see cref="IComparer"/>.
         /// </summary>
         class ComparerAdapter : EqualityAdapter
         {
@@ -87,7 +90,7 @@ namespace NUnit.Framework.Constraints
         #region Nested IEqualityComparer Adapter
 
         /// <summary>
-        /// Returns an EqualityAdapter that wraps an IEqualityComparer.
+        /// Returns an <see cref="EqualityAdapter"/> that wraps an <see cref="IEqualityComparer"/>.
         /// </summary>
         public static EqualityAdapter For(IEqualityComparer comparer)
         {
@@ -109,6 +112,45 @@ namespace NUnit.Framework.Constraints
             }
         }
 
+        /// <summary>
+        /// Returns an EqualityAdapter that uses a predicate function for items comparison.
+        /// </summary>
+        /// <typeparam name="TExpected"></typeparam>
+        /// <typeparam name="TActual"></typeparam>
+        /// <param name="comparison"></param>
+        /// <returns></returns>
+        public static EqualityAdapter For<TExpected, TActual>(Func<TExpected, TActual, bool> comparison)
+        {
+            return new PredicateEqualityAdapter<TExpected, TActual>(comparison);
+        }
+
+        internal class PredicateEqualityAdapter<TActual, TExpected> : EqualityAdapter
+        {
+            private readonly Func<TActual, TExpected, bool> _comparison;
+
+            /// <summary>
+            /// Returns true if the two objects can be compared by this adapter.
+            /// The base adapter cannot handle IEnumerables except for strings.
+            /// </summary>
+            public override bool CanCompare(object x, object y)
+            {
+                return true;
+            }
+
+            /// <summary>
+            /// Compares two objects, returning true if they are equal
+            /// </summary>
+            public override bool AreEqual(object x, object y)
+            {
+                return _comparison.Invoke((TActual)y, (TExpected)x);
+            }
+
+            public PredicateEqualityAdapter(Func<TActual, TExpected, bool> comparison)
+            {
+                _comparison = comparison;
+            }
+        }
+
         #endregion
 
         #region Nested GenericEqualityAdapter<T>
@@ -121,16 +163,16 @@ namespace NUnit.Framework.Constraints
             /// </summary>
             public override bool CanCompare(object x, object y)
             {
-                return typeof(T).IsAssignableFrom(x.GetType())
-                    && typeof(T).IsAssignableFrom(y.GetType());
+                return typeof(T).GetTypeInfo().IsAssignableFrom(x.GetType().GetTypeInfo())
+                    && typeof(T).GetTypeInfo().IsAssignableFrom(y.GetType().GetTypeInfo());
             }
 
             protected void ThrowIfNotCompatible(object x, object y)
             {
-                if (!typeof(T).IsAssignableFrom(x.GetType()))
+                if (!typeof(T).GetTypeInfo().IsAssignableFrom(x.GetType().GetTypeInfo()))
                     throw new ArgumentException("Cannot compare " + x.ToString());
 
-                if (!typeof(T).IsAssignableFrom(y.GetType()))
+                if (!typeof(T).GetTypeInfo().IsAssignableFrom(y.GetType().GetTypeInfo()))
                     throw new ArgumentException("Cannot compare " + y.ToString());
             }
         }
@@ -140,7 +182,7 @@ namespace NUnit.Framework.Constraints
         #region Nested IEqualityComparer<T> Adapter
 
         /// <summary>
-        /// Returns an EqualityAdapter that wraps an IEqualityComparer&lt;T&gt;.
+        /// Returns an <see cref="EqualityAdapter"/> that wraps an <see cref="IEqualityComparer{T}"/>.
         /// </summary>
         public static EqualityAdapter For<T>(IEqualityComparer<T> comparer)
         {
@@ -168,7 +210,7 @@ namespace NUnit.Framework.Constraints
         #region Nested IComparer<T> Adapter
 
         /// <summary>
-        /// Returns an EqualityAdapter that wraps an IComparer&lt;T&gt;.
+        /// Returns an <see cref="EqualityAdapter"/> that wraps an <see cref="IComparer{T}"/>.
         /// </summary>
         public static EqualityAdapter For<T>(IComparer<T> comparer)
         {
@@ -176,7 +218,7 @@ namespace NUnit.Framework.Constraints
         }
 
         /// <summary>
-        /// EqualityAdapter that wraps an IComparer.
+        /// <see cref="EqualityAdapter"/> that wraps an <see cref="IComparer"/>.
         /// </summary>
         class ComparerAdapter<T> : GenericEqualityAdapter<T>
         {
@@ -199,7 +241,7 @@ namespace NUnit.Framework.Constraints
         #region Nested Comparison<T> Adapter
 
         /// <summary>
-        /// Returns an EqualityAdapter that wraps a Comparison&lt;T&gt;.
+        /// Returns an <see cref="EqualityAdapter"/> that wraps a <see cref="Comparison{T}"/>.
         /// </summary>
         public static EqualityAdapter For<T>(Comparison<T> comparer)
         {
@@ -222,6 +264,6 @@ namespace NUnit.Framework.Constraints
             }
         }
 
-        #endregion
+#endregion
     }
 }

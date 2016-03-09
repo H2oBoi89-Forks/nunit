@@ -22,13 +22,11 @@
 // ***********************************************************************
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
-using System.Web.UI;
-using System.Xml;
 using NUnit.Engine.Internal;
 using NUnit.Engine.Extensibility;
+using System.Runtime.Serialization;
 
 namespace NUnit.Engine.Drivers
 {
@@ -39,6 +37,7 @@ namespace NUnit.Engine.Drivers
     public class NUnit3FrameworkDriver : IFrameworkDriver
     {
         private const string NUNIT_FRAMEWORK = "nunit.framework";
+        private const string LOAD_MESSAGE = "Method called without calling Load first";
 
         private static readonly string CONTROLLER_TYPE = "NUnit.Framework.Api.FrameworkController";
         private static readonly string LOAD_ACTION = CONTROLLER_TYPE + "+LoadTestsAction";
@@ -51,29 +50,39 @@ namespace NUnit.Engine.Drivers
 
         AppDomain _testDomain;
         string _testAssemblyPath;
-        string _frameworkAssemblyName;
 
         object _frameworkController;
 
-        public NUnit3FrameworkDriver(AppDomain testDomain, string testAssemblyPath, IDictionary<string, object> settings)
-            : this(testDomain, NUNIT_FRAMEWORK, testAssemblyPath, settings) { }
-
-        public NUnit3FrameworkDriver(AppDomain testDomain, string frameworkAssemblyName, string testAssemblyPath, IDictionary<string, object> settings)
+        /// <summary>
+        /// Construct an NUnit3FrameworkDriver
+        /// </summary>
+        /// <param name="testDomain">The AppDomain in which to create the FrameworkController</param>
+        public NUnit3FrameworkDriver(AppDomain testDomain)
         {
-            Guard.ArgumentValid(File.Exists(testAssemblyPath), "testAssemblyPath", "Framework driver constructor called with a file name that doesn't exist.");
-
             _testDomain = testDomain;
-            _testAssemblyPath = testAssemblyPath;
-            _frameworkAssemblyName = frameworkAssemblyName;
-            _frameworkController = CreateObject(CONTROLLER_TYPE, testAssemblyPath, (System.Collections.IDictionary)settings);
         }
+
+        public string ID { get; set; }
 
         /// <summary>
         /// Loads the tests in an assembly.
         /// </summary>
         /// <returns>An Xml string representing the loaded test</returns>
-        public string Load()
+        public string Load(string testAssemblyPath, IDictionary<string, object> settings)
         {
+            Guard.ArgumentValid(File.Exists(testAssemblyPath), "testAssemblyPath", "Framework driver constructor called with a file name that doesn't exist.");
+
+            var idPrefix = string.IsNullOrEmpty(ID) ? "" : ID + "-";
+            _testAssemblyPath = testAssemblyPath;
+            try
+            {
+                _frameworkController = CreateObject(CONTROLLER_TYPE, testAssemblyPath, idPrefix, (System.Collections.IDictionary)settings);
+            }
+            catch (SerializationException ex)
+            {
+                throw new NUnitEngineException("The NUnit 3.0 driver does not support the portable version of NUnit. Use a platform specific runner.", ex);
+            }
+
             CallbackHandler handler = new CallbackHandler();
 
             log.Info("Loading {0} - see separate log file", Path.GetFileName(_testAssemblyPath));
@@ -82,11 +91,13 @@ namespace NUnit.Engine.Drivers
             return handler.Result;
         }
 
-        public int CountTestCases(TestFilter filter)
+        public int CountTestCases(string filter)
         {
+            CheckLoadWasCalled();
+
             CallbackHandler handler = new CallbackHandler();
 
-            CreateObject(COUNT_ACTION, _frameworkController, filter.Text, handler);
+            CreateObject(COUNT_ACTION, _frameworkController, filter, handler);
 
             return int.Parse(handler.Result);
         }
@@ -97,12 +108,14 @@ namespace NUnit.Engine.Drivers
         /// <param name="listener">An ITestEventHandler that receives progress notices</param>
         /// <param name="filter">A filter that controls which tests are executed</param>
         /// <returns>An Xml string representing the result</returns>
-        public string Run(ITestEventListener listener, TestFilter filter)
+        public string Run(ITestEventListener listener, string filter)
         {
+            CheckLoadWasCalled();
+
             CallbackHandler handler = new RunTestsCallbackHandler(listener);
 
             log.Info("Running {0} - see separate log file", Path.GetFileName(_testAssemblyPath));
-            CreateObject(RUN_ACTION, _frameworkController, filter.Text, handler);
+            CreateObject(RUN_ACTION, _frameworkController, filter, handler);
 
             return handler.Result;
         }
@@ -121,22 +134,30 @@ namespace NUnit.Engine.Drivers
         /// </summary>
         /// <param name="filter">A filter indicating which tests to include</param>
         /// <returns>An Xml string representing the tests</returns>
-        public string Explore(TestFilter filter)
+        public string Explore(string filter)
         {
+            CheckLoadWasCalled();
+
             CallbackHandler handler = new CallbackHandler();
 
             log.Info("Exploring {0} - see separate log file", Path.GetFileName(_testAssemblyPath));
-            CreateObject(EXPLORE_ACTION, _frameworkController, filter.Text, handler);
+            CreateObject(EXPLORE_ACTION, _frameworkController, filter, handler);
 
             return handler.Result;
         }
 
         #region Helper Methods
 
+        private void CheckLoadWasCalled()
+        {
+            if (_frameworkController == null)
+                throw new InvalidOperationException(LOAD_MESSAGE);
+        }
+
         private object CreateObject(string typeName, params object[] args)
         {
             return _testDomain.CreateInstanceAndUnwrap(
-                _frameworkAssemblyName, typeName, false, 0,
+                NUNIT_FRAMEWORK, typeName, false, 0,
 #if !NET_4_0
                 null, args, null, null, null );
 #else

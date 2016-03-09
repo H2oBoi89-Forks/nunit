@@ -35,7 +35,6 @@ namespace NUnit.Engine
         /// <summary>
         /// Load a TestPackage for possible execution
         /// </summary>
-        /// <param name="package">The TestPackage to be loaded</param>
         /// <returns>A TestEngineResult.</returns>
         TestEngineResult Load();
 
@@ -75,6 +74,15 @@ namespace NUnit.Engine
         /// </summary>
         /// <param name="listener">An ITestEventHandler to receive events</param>
         /// <param name="filter">A TestFilter used to select tests</param>
+        /// <returns>An <see cref="AsyncTestEngineResult"/> that will provide the result of the test execution</returns>
+        AsyncTestEngineResult RunAsync(ITestEventListener listener, TestFilter filter);
+        
+        /// <summary>
+        /// Start a run of the tests in the loaded TestPackage. The tests are run
+        /// asynchronously and the listener interface is notified as it progresses.
+        /// </summary>
+        /// <param name="listener">An ITestEventHandler to receive events</param>
+        /// <param name="filter">A TestFilter used to select tests</param>
         void StartRun(ITestEventListener listener, TestFilter filter);
 
         /// <summary>
@@ -88,7 +96,7 @@ namespace NUnit.Engine
         /// Explore a loaded TestPackage and return information about
         /// the tests found.
         /// </summary>
-        /// <param name="package">The TestPackage to be explored</param>
+        /// <param name="filter">Criteria used to filter the search results</param>
         /// <returns>A TestEngineResult.</returns>
         TestEngineResult Explore(TestFilter filter);
     }

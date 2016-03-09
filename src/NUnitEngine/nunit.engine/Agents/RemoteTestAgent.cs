@@ -52,7 +52,7 @@ namespace NUnit.Engine.Agents
         /// <summary>
         /// Construct a RemoteTestAgent
         /// </summary>
-        public RemoteTestAgent( Guid agentId, ITestAgency agency, ServiceContext services )
+        public RemoteTestAgent( Guid agentId, ITestAgency agency, IServiceLocator services )
             : base(agentId, agency, services) 
         {
         }
@@ -117,7 +117,7 @@ namespace NUnit.Engine.Agents
         /// Explore a loaded TestPackage and return information about
         /// the tests found.
         /// </summary>
-        /// <param name="package">The TestPackage to be explored</param>
+        /// <param name="filter">Criteria used to filter the search results</param>
         /// <returns>A TestEngineResult.</returns>
         public TestEngineResult Explore(TestFilter filter)
         {
@@ -131,7 +131,7 @@ namespace NUnit.Engine.Agents
         {
             //System.Diagnostics.Debug.Assert(false, "Attach debugger if desired");
 
-            _runner = Services.TestRunnerFactory.MakeTestRunner(_package);
+            _runner = Services.GetService<ITestRunnerFactory>().MakeTestRunner(_package);
             return _runner.Load();
         }
 
@@ -184,12 +184,24 @@ namespace NUnit.Engine.Agents
         /// </summary>
         /// <param name="listener">An ITestEventHandler to receive events</param>
         /// <param name="filter">A TestFilter used to select tests</param>
-        public void StartRun(ITestEventListener listener, TestFilter filter)
+        /// <returns>A <see cref="AsyncTestEngineResult"/> that will provide the result of the test execution</returns>
+        public AsyncTestEngineResult RunAsync(ITestEventListener listener, TestFilter filter)
         {
             if (_runner == null)
-                throw new InvalidOperationException("RemoteTestAgent: StartRun called before Load");
+                throw new InvalidOperationException("RemoteTestAgent: RunAsync called before Load");
 
-            _runner.StartRun(listener, filter);
+            return _runner.RunAsync(listener, filter);
+        }
+
+        /// <summary>
+        /// Start a run of the tests in the loaded TestPackage. The tests are run
+        /// asynchronously and the listener interface is notified as it progresses.
+        /// </summary>
+        /// <param name="listener">An ITestEventHandler to receive events</param>
+        /// <param name="filter">A TestFilter used to select tests</param>
+        public void StartRun(ITestEventListener listener, TestFilter filter)
+        {
+            RunAsync(listener, filter);
         }
 
         /// <summary>

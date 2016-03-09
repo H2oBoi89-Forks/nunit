@@ -1,5 +1,5 @@
 // ***********************************************************************
-// Copyright (c) 2008 Charlie Poole
+// Copyright (c) 2015 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -23,8 +23,6 @@
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Reflection;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.TestData.TestCaseAttributeFixture;
@@ -109,6 +107,14 @@ namespace NUnit.Framework.Attributes
             Assert.AreEqual(1942, dt.Year);
         }
 
+        [TestCase("4:44:15")]
+        public void CanConvertStringToTimeSpan(TimeSpan ts)
+        {
+            Assert.AreEqual(4, ts.Hours);
+            Assert.AreEqual(44, ts.Minutes);
+            Assert.AreEqual(15, ts.Seconds);
+        }
+
         [TestCase(null)]
         public void CanPassNullAsFirstArgument(object a)
         {
@@ -186,23 +192,28 @@ namespace NUnit.Framework.Attributes
             Assert.AreEqual("c", array[0]);
         }
 
-        [TestCase(1)]
-        public void NullableSimpleFormalParametersWithArgument(int? a)
+#if !NETCF
+        [TestCase("a")]
+        [TestCase("a", "b")]
+        public void HandlesOptionalArguments(string s1, string s2 = "b")
         {
-            Assert.AreEqual(1, a);
+            Assert.AreEqual("a", s1);
+            Assert.AreEqual("b", s2);
         }
 
-        [TestCase(null)]
-        public void NullableSimpleFormalParametersWithNullArgument(int? a)
+        [TestCase]
+        [TestCase("a", "b")]
+        public void HandlesAllOptionalArguments(string s1 = "a", string s2 = "b")
         {
-            Assert.IsNull(a);
+            Assert.AreEqual("a", s1);
+            Assert.AreEqual("b", s2);
         }
+#endif
 
-        [TestCase(null, ExpectedResult = null)]
-        [TestCase(1, ExpectedResult = 1)]
-        public int? TestCaseWithNullableReturnValue(int? a)
+        [TestCase("a", "b", Explicit = true)]
+        public void ShouldNotRunAndShouldNotFailInConsoleRunner()
         {
-            return a;
+            Assert.Fail();
         }
 
         [Test]
@@ -214,12 +225,22 @@ namespace NUnit.Framework.Attributes
         }
 
         [Test]
-        public void CanSpecifyTestName()
+        public void CanSpecifyTestName_FixedText()
         {
             Test test = (Test)TestBuilder.MakeParameterizedMethodSuite(
-                typeof(TestCaseAttributeFixture), "MethodHasTestNameSpecified").Tests[0];
+                typeof(TestCaseAttributeFixture), "MethodHasTestNameSpecified_FixedText").Tests[0];
             Assert.AreEqual("XYZ", test.Name);
             Assert.AreEqual("NUnit.TestData.TestCaseAttributeFixture.TestCaseAttributeFixture.XYZ", test.FullName);
+        }
+
+        [Test]
+        public void CanSpecifyTestName_WithMethodName()
+        {
+            Test test = (Test)TestBuilder.MakeParameterizedMethodSuite(
+                typeof(TestCaseAttributeFixture), "MethodHasTestNameSpecified_WithMethodName").Tests[0];
+            var expectedName = "MethodHasTestNameSpecified_WithMethodName+XYZ";
+            Assert.AreEqual(expectedName, test.Name);
+            Assert.AreEqual("NUnit.TestData.TestCaseAttributeFixture.TestCaseAttributeFixture." + expectedName, test.FullName);
         }
 
         [Test]
@@ -278,46 +299,213 @@ namespace NUnit.Framework.Attributes
         [Test]
         public void CanIncludePlatform()
         {
-            bool isLinux = System.IO.Path.DirectorySeparatorChar == '/';
+            bool isLinux = OSPlatform.CurrentPlatform.IsUnix;
+            bool isMacOSX = OSPlatform.CurrentPlatform.IsMacOSX;
             
             TestSuite suite = TestBuilder.MakeParameterizedMethodSuite(
                 typeof(TestCaseAttributeFixture), "MethodWithIncludePlatform");
 
             Test testCase1 = TestFinder.Find("MethodWithIncludePlatform(1)", suite, false);
             Test testCase2 = TestFinder.Find("MethodWithIncludePlatform(2)", suite, false);
+            Test testCase3 = TestFinder.Find("MethodWithIncludePlatform(3)", suite, false);
+            Test testCase4 = TestFinder.Find("MethodWithIncludePlatform(4)", suite, false);
             if (isLinux)
             {
                 Assert.That(testCase1.RunState, Is.EqualTo(RunState.Skipped));
                 Assert.That(testCase2.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Skipped));
+            }
+            else if (isMacOSX)
+            {
+                Assert.That(testCase1.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase2.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Skipped));
             }
             else
             {
                 Assert.That(testCase1.RunState, Is.EqualTo(RunState.Runnable));
                 Assert.That(testCase2.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Skipped));
             }
         }
 
         [Test]
         public void CanExcludePlatform()
         {
-            bool isLinux = System.IO.Path.DirectorySeparatorChar == '/';
+            bool isLinux = OSPlatform.CurrentPlatform.IsUnix;
+            bool isMacOSX = OSPlatform.CurrentPlatform.IsMacOSX;
 
             TestSuite suite = TestBuilder.MakeParameterizedMethodSuite(
                 typeof(TestCaseAttributeFixture), "MethodWitExcludePlatform");
 
             Test testCase1 = TestFinder.Find("MethodWitExcludePlatform(1)", suite, false);
             Test testCase2 = TestFinder.Find("MethodWitExcludePlatform(2)", suite, false);
+            Test testCase3 = TestFinder.Find("MethodWitExcludePlatform(3)", suite, false);
+            Test testCase4 = TestFinder.Find("MethodWitExcludePlatform(4)", suite, false);
             if (isLinux)
             {
                 Assert.That(testCase1.RunState, Is.EqualTo(RunState.Runnable));
                 Assert.That(testCase2.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Runnable));
+            }
+            else if (isMacOSX)
+            {
+                Assert.That(testCase1.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase2.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Skipped));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Runnable));
             }
             else
             {
                 Assert.That(testCase1.RunState, Is.EqualTo(RunState.Skipped));
                 Assert.That(testCase2.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase3.RunState, Is.EqualTo(RunState.Runnable));
+                Assert.That(testCase4.RunState, Is.EqualTo(RunState.Runnable));
             }
         }
 #endif
+
+
+        #region Nullable<> tests
+
+        [TestCase(12, 3, 4)]
+        [TestCase(12, 2, 6)]
+        [TestCase(12, 4, 3)]
+        public void NullableIntegerDivisionWithResultPassedToTest(int? n, int? d, int? q)
+        {
+            Assert.AreEqual(q, n / d);
+        }
+
+        [TestCase(12, 3, ExpectedResult = 4)]
+        [TestCase(12, 2, ExpectedResult = 6)]
+        [TestCase(12, 4, ExpectedResult = 3)]
+        public int? NullableIntegerDivisionWithResultCheckedByNUnit(int? n, int? d)
+        {
+            return n / d;
+        }
+
+        [TestCase(2, 2, ExpectedResult = 4)]
+        public double? CanConvertIntToNullableDouble(double? x, double? y)
+        {
+            return x + y;
+        }
+
+        [TestCase(1)]
+        public void CanConvertIntToNullableShort(short? x)
+        {
+            Assert.That(x.HasValue);
+            Assert.That(x.Value, Is.EqualTo(1));
+        }
+
+        [TestCase(1)]
+        public void CanConvertIntToNullableByte(byte? x)
+        {
+            Assert.That(x.HasValue);
+            Assert.That(x.Value, Is.EqualTo(1));
+        }
+
+        [TestCase(1)]
+        public void CanConvertIntToNullableSByte(sbyte? x)
+        {
+            Assert.That(x.HasValue);
+            Assert.That(x.Value, Is.EqualTo(1));
+        }
+
+        [TestCase("2.2", "3.3", ExpectedResult = 5.5)]
+        public decimal? CanConvertStringToNullableDecimal(decimal? x, decimal? y)
+        {
+            Assert.That(x.HasValue);
+            Assert.That(y.HasValue);
+            return x.Value + y.Value;
+        }
+
+        [TestCase(null)]
+        public void SupportsNullableDecimal(decimal? x)
+        {
+            Assert.That(x.HasValue, Is.False);
+        }
+
+        [TestCase(2.2, 3.3, ExpectedResult = 5.5)]
+        public decimal? CanConvertDoubleToNullableDecimal(decimal? x, decimal? y)
+        {
+            return x + y;
+        }
+
+        [TestCase(5, 2, ExpectedResult = 7)]
+        public decimal? CanConvertIntToNullableDecimal(decimal? x, decimal? y)
+        {
+            return x + y;
+        }
+
+        [TestCase(5, 2, ExpectedResult = 7)]
+        public short? CanConvertSmallIntsToNullableShort(short? x, short? y)
+        {
+            return (short)(x + y);
+        }
+
+        [TestCase(5, 2, ExpectedResult = 7)]
+        public byte? CanConvertSmallIntsToNullableByte(byte? x, byte? y)
+        {
+            return (byte)(x + y);
+        }
+
+        [TestCase(5, 2, ExpectedResult = 7)]
+        public sbyte? CanConvertSmallIntsToNullableSByte(sbyte? x, sbyte? y)
+        {
+            return (sbyte)(x + y);
+        }
+
+        [TestCase("12-October-1942")]
+        public void CanConvertStringToNullableDateTime(DateTime? dt)
+        {
+            Assert.That(dt.HasValue);
+            Assert.AreEqual(1942, dt.Value.Year);
+        }
+
+        [TestCase(null)]
+        public void SupportsNullableDateTime(DateTime? dt)
+        {
+            Assert.That(dt.HasValue, Is.False);
+        }
+
+        [TestCase("4:44:15")]
+        public void CanConvertStringToNullableTimeSpan(TimeSpan? ts)
+        {
+            Assert.That(ts.HasValue);
+            Assert.AreEqual(4, ts.Value.Hours);
+            Assert.AreEqual(44, ts.Value.Minutes);
+            Assert.AreEqual(15, ts.Value.Seconds);
+        }
+
+        [TestCase(null)]
+        public void SupportsNullableTimeSpan(TimeSpan? dt)
+        {
+            Assert.That(dt.HasValue, Is.False);
+        }
+
+        [TestCase(1)]
+        public void NullableSimpleFormalParametersWithArgument(int? a)
+        {
+            Assert.AreEqual(1, a);
+        }
+
+        [TestCase(null)]
+        public void NullableSimpleFormalParametersWithNullArgument(int? a)
+        {
+            Assert.IsNull(a);
+        }
+
+        [TestCase(null, ExpectedResult = null)]
+        [TestCase(1, ExpectedResult = 1)]
+        public int? TestCaseWithNullableReturnValue(int? a)
+        {
+            return a;
+        }
+
+        #endregion
     }
 }

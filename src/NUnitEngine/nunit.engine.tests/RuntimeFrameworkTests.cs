@@ -22,6 +22,7 @@
 // ***********************************************************************
 
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace NUnit.Engine.Tests
@@ -58,17 +59,31 @@ namespace NUnit.Engine.Tests
         }
 
         [Test]
-        public void CanListAvailableFrameworks()
+        public void AvailableFrameworksList()
         {
             RuntimeFramework[] available = RuntimeFramework.AvailableFrameworks;
-            Assert.That(available, Has.Length.GreaterThan(0) );
-            bool foundCurrent = false;
-            foreach (RuntimeFramework framework in available)
-            {
+            Assert.That(RuntimeFramework.AvailableFrameworks.Length, Is.GreaterThan(0) );
+            foreach (var framework in RuntimeFramework.AvailableFrameworks)
                 Console.WriteLine("Available: {0}", framework.DisplayName);
-                foundCurrent |= RuntimeFramework.CurrentFramework.Supports(framework);
-            }
-            Assert.That(foundCurrent, "CurrentFramework not listed");
+        }
+
+        [Test]
+        public void AvalableFrameworksList_IncludesCurrentFramework()
+        {
+            foreach (var framework in RuntimeFramework.AvailableFrameworks)
+                if (RuntimeFramework.CurrentFramework.Supports(framework))
+                    return;
+
+            Assert.Fail("CurrentFramework not listed as available");
+        }
+
+        [Test]
+        public void AvailableFrameworksList_ContainsNoDuplicates()
+        {
+            var names = new List<string>();
+            foreach (var framework in RuntimeFramework.AvailableFrameworks)
+                names.Add(framework.DisplayName);
+            Assert.That(names, Is.Unique);
         }
 
         [TestCaseSource("frameworkData")]
@@ -113,7 +128,7 @@ namespace NUnit.Engine.Tests
             return f1.Supports(f2);
         }
 
-        internal static TestCaseData[] matchData = new TestCaseData[] {
+        static TestCaseData[] matchData = new TestCaseData[] {
             new TestCaseData(
                 new RuntimeFramework(RuntimeType.Net, new Version(3,5)), 
                 new RuntimeFramework(RuntimeType.Net, new Version(2,0))) 
@@ -216,7 +231,7 @@ namespace NUnit.Engine.Tests
             }
         }
 
-        internal FrameworkData[] frameworkData = new FrameworkData[] {
+        static FrameworkData[] frameworkData = new FrameworkData[] {
             new FrameworkData(RuntimeType.Net, new Version(1,0), new Version(1,0,3705), "net-1.0", "Net 1.0"),
             //new FrameworkData(RuntimeType.Net, new Version(1,0,3705), new Version(1,0,3705), "net-1.0.3705", "Net 1.0.3705"),
             //new FrameworkData(RuntimeType.Net, new Version(1,0), new Version(1,0,3705), "net-1.0.3705", "Net 1.0.3705"),

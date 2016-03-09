@@ -1,7 +1,7 @@
 ﻿// ***********************************************************************
 // Copyright (c) 2011 Charlie Poole
 //
-// Permission is hereby granted, free of charge, to any person obtainingn
+// Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
 // "Software"), to deal in the Software without restriction, including
 // without limitation the rights to use, copy, modify, merge, publish,
@@ -35,8 +35,6 @@ namespace NUnit.Engine.Api.Tests
         {
             TestFilter filter = TestFilter.Empty;
             Assert.That(filter.Text, Is.EqualTo("<filter/>"));
-            Assert.That(filter.Xml.Name, Is.EqualTo("filter"));
-            Assert.That(filter.Xml.ChildNodes.Count, Is.EqualTo(0));
         }
 
         [Test]
@@ -45,8 +43,6 @@ namespace NUnit.Engine.Api.Tests
             string text = "<filter><tests><test>My.Test.Name</test></tests></filter>";
             TestFilter filter = new TestFilter(text);
             Assert.That(filter.Text, Is.EqualTo(text));
-            Assert.That(filter.Xml.Name, Is.EqualTo("filter"));
-            Assert.That(filter.Xml.SelectSingleNode("tests/test").InnerText, Is.EqualTo("My.Test.Name"));
         }
 
         [Test]
@@ -55,12 +51,6 @@ namespace NUnit.Engine.Api.Tests
             string text = "<filter><tests><test>My.First.Test</test><test>My.Second.Test</test><test>My.Third.Test</test></tests></filter>";
             TestFilter filter = new TestFilter(text);
             Assert.That(filter.Text, Is.EqualTo(text));
-            Assert.That(filter.Xml.Name, Is.EqualTo("filter"));
-            XmlNodeList testNodes = filter.Xml.SelectNodes("tests/test");
-            Assert.That(testNodes.Count, Is.EqualTo(3));
-            Assert.That(testNodes[0].InnerText, Is.EqualTo("My.First.Test"));
-            Assert.That(testNodes[1].InnerText, Is.EqualTo("My.Second.Test"));
-            Assert.That(testNodes[2].InnerText, Is.EqualTo("My.Third.Test"));
         }
     }
 }

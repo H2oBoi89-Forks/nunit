@@ -1,7 +1,7 @@
 ﻿// ***********************************************************************
 // Copyright (c) 2011-2014 Charlie Poole
 //
-// Permission is hereby granted, free of charge, to any person obtainingn
+// Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
 // "Software"), to deal in the Software without restriction, including
 // without limitation the rights to use, copy, modify, merge, publish,
@@ -34,7 +34,7 @@ namespace NUnit.Engine.Runners
         /// </summary>
         /// <param name="services">The services.</param>
         /// <param name="package">The package.</param>
-        public MultipleTestDomainRunner(ServiceContext services, TestPackage package) : base(services, package) { }
+        public MultipleTestDomainRunner(IServiceLocator services, TestPackage package) : base(services, package) { }
 
         #region AggregatingTestRunner Overrides
 

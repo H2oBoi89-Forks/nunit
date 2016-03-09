@@ -22,7 +22,6 @@
 // ***********************************************************************
 
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 
 namespace NUnit.Engine.Extensibility
@@ -30,23 +29,24 @@ namespace NUnit.Engine.Extensibility
     /// <summary>
     /// Interface implemented by a Type that knows how to create a driver for a test assembly.
     /// </summary>
+    [TypeExtensionPoint(
+        Description = "Supplies a driver to run tests that use a specific test framework.")]
     public interface IDriverFactory
     {
         /// <summary>
         /// Gets a flag indicating whether a given AssemblyName
         /// represents a test framework supported by this factory.
         /// </summary>
-        bool IsSupportedFramework(AssemblyName refAssembly);
+        /// <param name="reference">An AssemblyName referring to the possible test framework.</param>
+        bool IsSupportedTestFramework(AssemblyName reference);
 
         /// <summary>
-        /// Gets a driver for a given test assembly and framework
-        /// which it is already known to reference.
+        /// Gets a driver for a given test assembly and a framework
+        /// which the assembly is already known to reference.
         /// </summary>
         /// <param name="domain">The domain in which the assembly will be loaded</param>
-        /// <param name="frameworkAssemblyName">The name of the test framework reference</param>
-        /// <param name="assemblyPath">The path to the test assembly</param>
-        /// <param name="settings">A dictionarly of settings to be used for this assembly</param>
+        /// <param name="reference">An AssemblyName referring to the test framework.</param>
         /// <returns></returns>
-        IFrameworkDriver GetDriver(AppDomain domain, string frameworkAssemblyName, string assemblyPath, IDictionary<string, object> settings);
+        IFrameworkDriver GetDriver(AppDomain domain, AssemblyName reference);
     }
 }

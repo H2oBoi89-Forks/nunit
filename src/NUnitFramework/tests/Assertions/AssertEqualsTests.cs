@@ -1,4 +1,4 @@
-// ***********************************************************************
+﻿// ***********************************************************************
 // Copyright (c) 2004 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -29,7 +29,7 @@ using NUnit.TestUtilities;
 namespace NUnit.Framework.Assertions
 {
     [TestFixture]
-    public class EqualsFixture
+    public class AssertEqualsTests
     {
         [Test]
         public void Equals()
@@ -55,7 +55,28 @@ namespace NUnit.Framework.Assertions
             int i32 = 0;
             Assert.AreEqual(i32, l64);
         }
-        
+
+        [Test]
+        public void Bug524CharIntComparision()
+        {
+            char c = '\u0000';
+            Assert.AreEqual(0, c);
+        }
+
+        [Test]
+        public void Bug524CharIntWithoutOverload()
+        {
+            char c = '\u0000';
+            Assert.That(c, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void CharCharComparision()
+        {
+            char c = 'a';
+            Assert.That(c, Is.EqualTo('a'));
+        }
+
         [Test]
         public void IntegerLongComparison()
         {
@@ -281,6 +302,8 @@ namespace NUnit.Framework.Assertions
             long      l9 = 35;
             short    s10 = 35;
             ushort  us11 = 35;
+            char      c1 = '3';
+            char      c2 = 'a';
         
             System.Byte    b12  = 35;  
             System.SByte   sb13 = 35; 
@@ -293,6 +316,8 @@ namespace NUnit.Framework.Assertions
             System.UInt64  ui20 = 35; 
             System.Int16   i21  = 35; 
             System.UInt16  i22  = 35;
+            System.Char    c12 = '3';
+            System.Char    c22 = 'a';
 
             Assert.AreEqual(35, b1);
             Assert.AreEqual(35, sb2);
@@ -304,6 +329,8 @@ namespace NUnit.Framework.Assertions
             Assert.AreEqual(35, l9);
             Assert.AreEqual(35, s10);
             Assert.AreEqual(35, us11);
+            Assert.AreEqual('3', c1);
+            Assert.AreEqual('a', c2);
         
             Assert.AreEqual( 35, b12  );
             Assert.AreEqual( 35, sb13 );
@@ -316,6 +343,8 @@ namespace NUnit.Framework.Assertions
             Assert.AreEqual( 35, ui20 );
             Assert.AreEqual( 35, i21  );
             Assert.AreEqual( 35, i22  );
+            Assert.AreEqual('3', c12);
+            Assert.AreEqual('a', c22);
 
             byte? b23 = 35;
             sbyte? sb24 = 35;
@@ -327,6 +356,8 @@ namespace NUnit.Framework.Assertions
             long? l30 = 35;
             short? s31 = 35;
             ushort? us32 = 35;
+            char? c3 = '3';
+            char? c4 = 'a';
 
             Assert.AreEqual(35, b23);
             Assert.AreEqual(35, sb24);
@@ -338,6 +369,8 @@ namespace NUnit.Framework.Assertions
             Assert.AreEqual(35, l30);
             Assert.AreEqual(35, s31);
             Assert.AreEqual(35, us32);
+            Assert.AreEqual('3', c3);
+            Assert.AreEqual('a', c4);
         }
 
         [Test]
@@ -384,9 +417,12 @@ namespace NUnit.Framework.Assertions
         [Test]
         public void DirectoryInfoEqual()
         {
-            var one = new DirectoryInfo(Env.DocumentFolder);
-            var two = new DirectoryInfo(Env.DocumentFolder);
-            Assert.AreEqual(one, two);
+            using (var testDir = new TestDirectory())
+            {
+                var one = new DirectoryInfo(testDir.Directory.FullName);
+                var two = new DirectoryInfo(testDir.Directory.FullName);
+                Assert.AreEqual(one, two);
+            }
         }
 
         [Test]
@@ -395,16 +431,7 @@ namespace NUnit.Framework.Assertions
             using (var one = new TestDirectory())
             using (var two = new TestDirectory())
             {
-#if SILVERLIGHT
-                var expectedMessage = System.String.Format(
-                    "  Expected: <{0}>{1}  But was:  <{2}>{1}", one.Directory.Name, Env.NewLine, two.Directory.Name );
-#else
-                var expectedMessage = System.String.Format(
-                    "  Expected: <{0}>{1}  But was:  <{2}>{1}", one.ToString(), Env.NewLine, two.ToString());
-#endif
-
-                var ex = Assert.Throws<AssertionException>(() => Assert.AreEqual(one, two));
-                Assert.That(ex.Message, Is.EqualTo(expectedMessage));
+                var ex = Assert.Throws<AssertionException>(() => Assert.AreEqual(one.Directory, two.Directory));
             }
         }
 #endif
@@ -587,20 +614,81 @@ namespace NUnit.Framework.Assertions
             Assert.That(a, Is.EqualTo(1));
             Assert.That(1, Is.EqualTo(a));
         }
-    }
 
-    public class IntEquatable : IEquatable<int>
-    {
-        private int i;
-
-        public IntEquatable(int i)
+        [Test]
+        public void EqualsFailsWhenUsed()
         {
-            this.i = i;
+            var ex = Assert.Throws<InvalidOperationException>(() => Assert.Equals(string.Empty, string.Empty));
+            Assert.That(ex.Message, Does.StartWith("Assert.Equals should not be used for Assertions"));
         }
 
-        public bool Equals(int other)
+        [Test]
+        public void ReferenceEqualsFailsWhenUsed()
         {
-            return i.Equals(other);
+            var ex = Assert.Throws<InvalidOperationException>(() => Assert.ReferenceEquals(string.Empty, string.Empty));
+            Assert.That(ex.Message, Does.StartWith("Assert.ReferenceEquals should not be used for Assertions"));
+        }
+
+        [Test]
+        public void ShouldNotCallToStringOnClassForPassingTests()
+        {
+            var actual = new ThrowsIfToStringIsCalled(1);
+            var expected = new ThrowsIfToStringIsCalled(1);
+
+            Assert.AreEqual(expected, actual);
+        }
+
+        class IntEquatable : IEquatable<int>
+        {
+            int i;
+
+            public IntEquatable(int i)
+            {
+                this.i = i;
+            }
+
+            public bool Equals(int other)
+            {
+                return i.Equals(other);
+            }
+        }
+    }
+
+    /// <summary>
+    /// This class is for testing issue #1301 where ToString() is called on
+    /// a class to create the description of the constraint even where that
+    /// description is not used because the test passes.
+    /// </summary>
+    internal class ThrowsIfToStringIsCalled
+    {
+        int _x;
+
+        public ThrowsIfToStringIsCalled(int x)
+        {
+            _x = x;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj == null)
+                return false;
+
+            var other = obj as ThrowsIfToStringIsCalled;
+            if (other == null)
+                return false;
+
+            return _x == other._x;
+        }
+
+        public override int GetHashCode()
+        {
+            return _x;
+        }
+
+        public override string ToString()
+        {
+            Assert.Fail("Should not call ToString() if Assert does not fail");
+            return base.ToString();
         }
     }
 }

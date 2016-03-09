@@ -31,6 +31,11 @@ using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Execution;
 
+#if !SILVERLIGHT && !NETCF && !PORTABLE
+using System.Diagnostics;
+using System.Windows.Forms;
+#endif
+
 namespace NUnit.Framework.Api
 {
     /// <summary>
@@ -68,6 +73,20 @@ namespace NUnit.Framework.Api
         #endregion
 
         #region Properties
+
+#if PARALLEL
+        /// <summary>
+        /// Gets the default level of parallel execution (worker threads)
+        /// </summary>
+        public static int DefaultLevelOfParallelism
+        {
+#if NETCF
+            get { return 2; }
+#else
+            get { return Math.Max(Environment.ProcessorCount, 2); }
+#endif
+        }
+#endif
 
         /// <summary>
         /// The tree of tests that was loaded by the builder
@@ -189,13 +208,15 @@ namespace NUnit.Framework.Api
         /// <param name="filter">A test filter used to select tests to be run</param>
         /// <remarks>
         /// RunAsync is a template method, calling various abstract and
-        /// virtual methods to be overriden by derived classes.
+        /// virtual methods to be overridden by derived classes.
         /// </remarks>
         public void RunAsync(ITestListener listener, ITestFilter filter)
         {
             log.Info("Running tests");
             if (LoadedTest == null)
                 throw new InvalidOperationException("The Run method was called but no test has been loaded");
+
+            _runComplete.Reset();
 
             CreateTestExecutionContext(listener);
 
@@ -235,13 +256,29 @@ namespace NUnit.Framework.Api
 #endif
 
 #if PARALLEL
-            QueuingEventListener queue = new QueuingEventListener();
-            Context.Listener = queue;
+            // Queue and pump events, unless settings have SynchronousEvents == false
+            if (!Settings.Contains(PackageSettings.SynchronousEvents) || !(bool)Settings[PackageSettings.SynchronousEvents])
+            {
+                QueuingEventListener queue = new QueuingEventListener();
+                Context.Listener = queue;
 
-            _pump = new EventPump(listener, queue.Events);
-            _pump.Start();
-#else
-            Context.Dispatcher = new SimpleWorkItemDispatcher();
+                _pump = new EventPump(listener, queue.Events);
+                _pump.Start();
+            }
+#endif
+
+#if !NETCF
+            if (!System.Diagnostics.Debugger.IsAttached &&
+                Settings.Contains(PackageSettings.DebugTests) &&
+                (bool)Settings[PackageSettings.DebugTests])
+                System.Diagnostics.Debugger.Launch();
+
+#if !SILVERLIGHT && !PORTABLE
+            if (Settings.Contains(PackageSettings.PauseBeforeRun) &&
+                (bool)Settings[PackageSettings.PauseBeforeRun])
+                PauseBeforeRun();
+
+#endif
 #endif
 
             Context.Dispatcher.Dispatch(TopLevelWorkItem);
@@ -250,7 +287,7 @@ namespace NUnit.Framework.Api
         /// <summary>
         /// Signal any test run that is in process to stop. Return without error if no test is running.
         /// </summary>
-        /// <param name="force">If true, kill any test-running threads</param>
+        /// <param name="force">If true, kill any tests that are currently running</param>
         public void StopRun(bool force)
         {
             if (IsTestRunning)
@@ -259,8 +296,7 @@ namespace NUnit.Framework.Api
                     ? TestExecutionStatus.AbortRequested
                     : TestExecutionStatus.StopRequested;
 
-                if (force)
-                    Context.Dispatcher.CancelRun();
+                Context.Dispatcher.CancelRun(force);
             }
         }
 
@@ -304,6 +340,8 @@ namespace NUnit.Framework.Api
             }
             else
                 Context.Dispatcher = new SimpleWorkItemDispatcher();
+#else
+            Context.Dispatcher = new SimpleWorkItemDispatcher();
 #endif
         }
 
@@ -313,7 +351,8 @@ namespace NUnit.Framework.Api
         private void OnRunCompleted(object sender, EventArgs e)
         {
 #if PARALLEL
-            _pump.Dispose();
+            if (_pump != null)
+                _pump.Dispose();
 #endif
 
 #if !SILVERLIGHT && !NETCF && !PORTABLE
@@ -351,11 +390,16 @@ namespace NUnit.Framework.Api
                 ? (int)Settings[PackageSettings.NumberOfTestWorkers]
                 : (LoadedTest.Properties.ContainsKey(PropertyNames.LevelOfParallelism)
                    ? (int)LoadedTest.Properties.Get(PropertyNames.LevelOfParallelism)
-#if NETCF
-                   : 1);
-#else
-                   : Math.Max(Environment.ProcessorCount, 2));
+                   : NUnitTestAssemblyRunner.DefaultLevelOfParallelism);
+        }
 #endif
+
+#if !SILVERLIGHT && !NETCF && !PORTABLE
+        private static void PauseBeforeRun()
+        {
+            var process = Process.GetCurrentProcess();
+            string attachMessage = string.Format("Attach debugger to Process {0}.exe with Id {1} if desired.", process.ProcessName, process.Id);
+            MessageBox.Show(attachMessage, process.ProcessName, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 #endif
 

@@ -95,6 +95,11 @@ namespace NUnit.Framework.Interfaces
         public readonly static ResultState Ignored = new ResultState(TestStatus.Skipped, "Ignored");
 
         /// <summary>
+        /// The test was skipped because it is explicit
+        /// </summary>
+        public readonly static ResultState Explicit = new ResultState(TestStatus.Skipped, "Explicit");
+
+        /// <summary>
         /// The test succeeded
         /// </summary>
         public readonly static ResultState Success = new ResultState(TestStatus.Passed);
@@ -150,7 +155,7 @@ namespace NUnit.Framework.Interfaces
         public TestStatus Status { get; private set; }
 
         /// <summary>
-        /// Gets the label under which this test resullt is
+        /// Gets the label under which this test result is
         /// categorized, if any.
         /// </summary>
         public string Label { get; private set; }
@@ -229,7 +234,7 @@ namespace NUnit.Framework.Interfaces
 
     /// <summary>
     /// The FailureSite enum indicates the stage of a test
-    /// in which an error or failure occured.
+    /// in which an error or failure occurred.
     /// </summary>
     public enum FailureSite
     {

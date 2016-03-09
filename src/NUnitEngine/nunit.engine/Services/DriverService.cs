@@ -25,73 +25,91 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text;
-using Mono.Addins;
+using Mono.Cecil;
 using NUnit.Engine.Drivers;
 using NUnit.Engine.Extensibility;
+using NUnit.Engine.Internal;
 
 namespace NUnit.Engine.Services
 {
-    public class DriverService : IDriverService, IService
+    /// <summary>
+    /// The DriverService provides drivers able to load and run tests
+    /// using various frameworks.
+    /// </summary>
+    public class DriverService : Service, IDriverService
     {
-        private const string NUNIT_FRAMEWORK = "nunit.framework";
-        private const string NUNITLITE_FRAMEWORK = "nunitlite";
-
-        private const string OLDER_NUNIT_NOT_SUPPORTED_MESSAGE =
-            "Unable to load {0}. This runner only supports tests written for NUnit 3.0 or higher.";
-
         IList<IDriverFactory> _factories = new List<IDriverFactory>();
 
         #region IDriverService Members
 
-        public IFrameworkDriver GetDriver(AppDomain domain, string assemblyPath, IDictionary<string, object> settings)
+        /// <summary>
+        /// Get a driver suitable for use with a particular test assembly.
+        /// </summary>
+        /// <param name="domain">The AppDomain to use for the tests</param>
+        /// <param name="assemblyPath">The full path to the test assembly</param>
+        /// <returns></returns>
+        public IFrameworkDriver GetDriver(AppDomain domain, string assemblyPath)
         {
             if (!File.Exists(assemblyPath))
                 return new NotRunnableFrameworkDriver(assemblyPath, "File not found: " + assemblyPath);
 
+            if (!PathUtils.IsAssemblyFileType(assemblyPath))
+                return new NotRunnableFrameworkDriver(assemblyPath, "File type is not supported");
+
             try
             {
-                var testAssembly = Assembly.ReflectionOnlyLoadFrom(assemblyPath);
-                var references = testAssembly.GetReferencedAssemblies();
+                var references = new List<AssemblyName>();
+                foreach (var cecilRef in AssemblyDefinition.ReadAssembly(assemblyPath).MainModule.AssemblyReferences)
+                    references.Add(new AssemblyName(cecilRef.FullName));
 
                 foreach (var factory in _factories)
                 {
                     foreach (var reference in references)
                     {
-                        if (factory.IsSupportedFramework(reference))
-                            return factory.GetDriver(domain, reference.Name, assemblyPath, settings);
+                        if (factory.IsSupportedTestFramework(reference))
+                            return factory.GetDriver(domain, reference);
                     }
                 }
             }
-            catch (Exception ex)
+            catch (BadImageFormatException ex)
             {
                 return new NotRunnableFrameworkDriver(assemblyPath, ex.Message);
             }
 
-            return new NotRunnableFrameworkDriver(assemblyPath, "Unable to locate a driver for " + assemblyPath);
+            return new NotRunnableFrameworkDriver(assemblyPath, string.Format("No suitable tests found in '{0}'.\n" +
+                                                                              "Either assembly contains no tests or proper test driver has not been found.", assemblyPath));
         }
 
         #endregion
+
+        #region Service Overrides
+
+        public override void StartService()
+        {
+            Guard.OperationValid(ServiceContext != null, "Can't start DriverService outside of a ServiceContext");
+
+            try
+            {
+                _factories.Add(new NUnit3DriverFactory());
+
+                var extensionService = ServiceContext.GetService<ExtensionService>();
+                if (extensionService != null)
+                {
+                    foreach (IDriverFactory factory in extensionService.GetExtensions<IDriverFactory>())
+                        _factories.Add(factory);
+                }
+
+                var node = extensionService.GetExtensionNode("/NUnit/Engine/NUnitV2Driver");
+                if (node != null)
+                    _factories.Add(new NUnit2DriverFactory(node));
  
-        #region IService Members
-
-        private ServiceContext services;
-        public ServiceContext ServiceContext 
-        {
-            get { return services; }
-            set { services = value; }
-        }
-
-        public void InitializeService()
-        {
-            _factories.Add(new NUnit3DriverFactory());
-
-            foreach (IDriverFactory factory in AddinManager.GetExtensionObjects<IDriverFactory>())
-                _factories.Add(factory);
-        }
-
-        public void UnloadService()
-        {
+                Status = ServiceStatus.Started;
+            }
+            catch(Exception)
+            {
+                Status = ServiceStatus.Error;
+                throw;
+            }
         }
 
         #endregion

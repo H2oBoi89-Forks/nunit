@@ -1,5 +1,5 @@
 ﻿// ***********************************************************************
-// Copyright (c) 2013 Charlie Poole
+// Copyright (c) 2015 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -21,7 +21,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
-using System;
 using System.Xml;
 
 namespace NUnit.Engine.Internal.Tests
@@ -45,8 +44,8 @@ namespace NUnit.Engine.Internal.Tests
         {
             result1 = new TestEngineResult(resultText1);
             result2 = new TestEngineResult(resultText2);
-            twoResults = new TestEngineResult[] { result1, result2 };
-            twoNodes = new XmlNode[] { result1.Xml, result2.Xml };
+            twoResults = new[] { result1, result2 };
+            twoNodes = new[] { result1.Xml, result2.Xml };
         }
 
         [Test]
@@ -113,26 +112,6 @@ namespace NUnit.Engine.Internal.Tests
             Assert.That(combined.Attributes["inconclusive"].Value, Is.EqualTo("5"));
             Assert.That(combined.Attributes["skipped"].Value, Is.EqualTo("2"));
             Assert.That(combined.Attributes["asserts"].Value, Is.EqualTo("93"));
-        }
-
-        [Test]
-        public void InsertEnvironmentElement()
-        {
-            result1.Xml.InsertEnvironmentElement();
-
-            var env = result1.Xml.SelectSingleNode("environment");
-            Assert.NotNull(env);
-
-            Assert.NotNull(env.GetAttribute("nunit-version"));
-            Assert.NotNull(env.GetAttribute("clr-version"));
-            Assert.NotNull(env.GetAttribute("os-version"));
-            Assert.NotNull(env.GetAttribute("platform"));
-            Assert.NotNull(env.GetAttribute("cwd"));
-            Assert.NotNull(env.GetAttribute("machine-name"));
-            Assert.NotNull(env.GetAttribute("user"));
-            Assert.NotNull(env.GetAttribute("user-domain"));
-            Assert.NotNull(env.GetAttribute("culture"));
-            Assert.NotNull(env.GetAttribute("uiculture"));
         }
     }
 }

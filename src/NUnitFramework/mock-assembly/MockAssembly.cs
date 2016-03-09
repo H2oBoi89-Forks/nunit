@@ -22,10 +22,11 @@
 // ***********************************************************************
 
 using System;
-using NUnit.Common;
 using NUnit.Framework;
 using NUnit.Framework.Internal;
-using NUnitLite.Runner;
+#if !SILVERLIGHT && !PORTABLE
+using NUnitLite;
+#endif
 
 namespace NUnit.Tests
 {
@@ -36,6 +37,8 @@ namespace NUnit.Tests
         /// </summary>
         public class MockAssembly
         {
+            public const string FileName = "mock.nunit.assembly.exe";
+
             public const int Classes = 9;
             public const int NamespaceSuites = 6; // assembly, NUnit, Tests, Assemblies, Singletons, TestAssembly
 
@@ -48,7 +51,8 @@ namespace NUnit.Tests
                         + FixtureWithTestCases.Tests
                         + ParameterizedFixture.Tests
                         + GenericFixtureConstants.Tests
-                        + CDataTestFixure.Tests;
+                        + CDataTestFixure.Tests
+                        + TestNameEscaping.Tests;
             
             public const int Suites = MockTestFixture.Suites 
                         + Singletons.OneTestCase.Suites
@@ -60,6 +64,7 @@ namespace NUnit.Tests
                         + ParameterizedFixture.Suites
                         + GenericFixtureConstants.Suites
                         + CDataTestFixure.Suites
+                        + TestNameEscaping.Suites
                         + NamespaceSuites;
             
             public const int Nodes = Tests + Suites;
@@ -69,6 +74,7 @@ namespace NUnit.Tests
 
             public const int Ignored = MockTestFixture.Ignored + IgnoredFixture.Tests;
             public const int Explicit = MockTestFixture.Explicit + ExplicitFixture.Tests;
+            public const int Skipped = Ignored + Explicit;
             public const int NotRun = Ignored + Explicit + NotRunnable;
             public const int TestsRun = Tests - NotRun;
             public const int ResultCount = Tests - Explicit;
@@ -80,23 +86,21 @@ namespace NUnit.Tests
             public const int Inconclusive = MockTestFixture.Inconclusive;
             public const int Success = TestsRun - Errors - Failures - Inconclusive;
 
-            public const int Categories = MockTestFixture.Categories;
-
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !PORTABLE
             public static readonly string AssemblyPath = AssemblyHelper.GetAssemblyPath(typeof(MockAssembly).Assembly);
-#endif
 
             public static void Main(string[] args)
             {
-                new TextUI().Execute(args);
+                new AutoRun().Execute(args);
             }
+#endif
         }
 
         [TestFixture(Description="Fake Test Fixture")]
         [Category("FixtureCategory")]
         public class MockTestFixture
         {
-            public const int Tests = 11;
+            public const int Tests = 8;
             public const int Suites = 1;
 
             public const int Ignored = 1;
@@ -113,29 +117,13 @@ namespace NUnit.Tests
 
             public const int Inconclusive = 1;
 
-            public const int Categories = 5;
-            public const int MockCategoryTests = 2;
-
             [Test(Description="Mock Test #1")]
-            public void MockTest1()
-            {}
-
-            [Test]
             [Category("MockCategory")]
-            [Property("Severity","Critical")]
-            [Description("This is a really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really, really long description")]
-            public void MockTest2()
-            {}
+            [Property("Severity", "Critical")]
+            public void TestWithDescription() { }
 
             [Test]
-            [Category("MockCategory")]
-            [Category("AnotherCategory")]
-            public void MockTest3()
-            { Assert.Pass("Succeeded!"); }
-
-            [Test]
-            protected static void MockTest5()
-            {}
+            protected static void NonPublicTest() { }
 
             [Test]
             public void FailingTest()
@@ -143,25 +131,14 @@ namespace NUnit.Tests
                 Assert.Fail("Intentional failure");
             }
 
-            [Test, Property("TargetMethod", "SomeClassName"), Property("Size", 5), /*Property("TargetType", typeof( System.Threading.Thread ))*/]
-            public void TestWithManyProperties()
-            {}
-
-            [Test]
-            [Ignore("ignoring this test method for now")]
-            [Category("Foo")]
-            public void MockTest4()
-            {}
+            [Test, Ignore("Ignore Message")]
+            public void IgnoreTest() { }
 
             [Test, Explicit]
-            [Category( "Special" )]
-            public void ExplicitlyRunTest()
-            {}
+            public void ExplicitTest() { }
 
             [Test]
-            public void NotRunnableTest( int a, int b)
-            {
-            }
+            public void NotRunnableTest( int a, int b) { }
 
             [Test]
             public void InconclusiveTest()
@@ -338,5 +315,26 @@ namespace NUnit.Tests
         {
             Assert.Fail("The CDATA was: <![CDATA[ My <xml> ]]>");
         }
+    }
+
+    [TestFixture]
+    public class TestNameEscaping
+    {
+        public const int Tests = 10;
+        public const int Suites = 2;
+
+        [TestCase("< left bracket")]
+        [TestCase("> right bracket")]
+        [TestCase("'single quote'")]
+        [TestCase("\"double quote\"")]
+        [TestCase("&amp")]
+        public void MustBeEscaped(string str) { }
+
+        [TestCase("< left bracket", TestName = "<")]
+        [TestCase("> right bracket", TestName = ">")]
+        [TestCase("'single quote'", TestName = "'")]
+        [TestCase("double quote", TestName = "\"")]
+        [TestCase("amp", TestName = "&")]
+        public void MustBeEscaped_CustomName(string str) { }
     }
 }

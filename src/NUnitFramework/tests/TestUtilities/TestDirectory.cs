@@ -21,6 +21,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
+#if !PORTABLE
 using System;
 using System.IO;
 using NUnit.Framework;
@@ -42,6 +43,7 @@ namespace NUnit.TestUtilities
             Assume.That(_testDir.Exists, Is.False, _testDir + " should not already exist");
 
             _testDir.Create();
+            _testDir.Refresh();
             Assume.That(_testDir.Exists, Is.True, "Failed to create test dir " + _testDir);
         }
 
@@ -75,3 +77,4 @@ namespace NUnit.TestUtilities
         }
     }
 }
+    #endif

@@ -54,6 +54,9 @@ namespace NUnit.Framework.Internal.Commands
         /// <returns>A TestResult</returns>
         public override TestResult Execute(TestExecutionContext context)
         {
+            if (Test.Fixture == null)
+                Test.Fixture = context.TestObject;
+
             // In the current implementation, upstream actions only apply to tests. If that should change in the future,
             // then actions would have to be tested for here. For now we simply assert it in Debug. We allow 
             // ActionTargets.Default, because it is passed down by ParameterizedMethodSuite.
@@ -66,7 +69,7 @@ namespace NUnit.Framework.Internal.Commands
                 _actions.Add(new TestActionItem(action));
             }
 
-            foreach (ITestAction action in ActionsHelper.GetActionsFromAttributeProvider(((TestMethod)Test).Method))
+            foreach (ITestAction action in ActionsHelper.GetActionsFromAttributeProvider(((TestMethod)Test).Method.MethodInfo))
                 if (action.Targets == ActionTargets.Default || (action.Targets & ActionTargets.Test) == ActionTargets.Test)
                     _actions.Add(new TestActionItem(action));
 

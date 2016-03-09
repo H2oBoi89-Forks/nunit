@@ -29,9 +29,10 @@ namespace NUnit.Engine.Services
     /// <summary>
     /// Summary description for RecentFilesService.
     /// </summary>
-    public class RecentFilesService : IRecentFiles, IService
+    public class RecentFilesService : Service, IRecentFiles
     {
         private IList<string> _fileEntries = new List<string>();
+        private ISettings _userSettings;
 
         private const int MinSize = 0;
         private const int MaxSize = 24;
@@ -39,13 +40,11 @@ namespace NUnit.Engine.Services
 
         #region Properties
 
-        public ServiceContext ServiceContext { get; set; }
-
         public int MaxFiles
         {
             get 
             { 
-                int size = ServiceContext.UserSettings.GetSetting("Gui.RecentProjects.MaxFiles", DefaultSize );
+                int size = _userSettings.GetSetting("Gui.RecentProjects.MaxFiles", DefaultSize );
                 
                 if ( size < MinSize ) size = MinSize;
                 if ( size > MaxSize ) size = MaxSize;
@@ -60,7 +59,7 @@ namespace NUnit.Engine.Services
                 if ( newSize < MinSize ) newSize = MinSize;
                 if ( newSize > MaxSize ) newSize = MaxSize;
 
-                ServiceContext.UserSettings.SaveSetting( "Gui.RecentProjects.MaxFiles", newSize );
+                _userSettings.SaveSetting( "Gui.RecentProjects.MaxFiles", newSize );
                 if ( newSize < oldSize ) SaveEntriesToSettings();
             }
         }
@@ -101,7 +100,7 @@ namespace NUnit.Engine.Services
             {
                 if (_fileEntries.Count >= MaxFiles) break;
 
-                string fileSpec = ServiceContext.UserSettings.GetSetting(GetRecentFileKey(prefix, index)) as string;
+                string fileSpec = _userSettings.GetSetting(GetRecentFileKey(prefix, index)) as string;
                 if (fileSpec != null) _fileEntries.Add(fileSpec);
             }
         }
@@ -109,7 +108,6 @@ namespace NUnit.Engine.Services
         private void SaveEntriesToSettings()
         {
             string prefix = "Gui.RecentProjects";
-            ISettings settings = ServiceContext.UserSettings;
 
             while( _fileEntries.Count > MaxFiles )
                 _fileEntries.RemoveAt( _fileEntries.Count - 1 );
@@ -118,13 +116,13 @@ namespace NUnit.Engine.Services
             {
                 string keyName = GetRecentFileKey( prefix, index + 1 );
                 if ( index < _fileEntries.Count )
-                    settings.SaveSetting( keyName, _fileEntries[index] );
+                    _userSettings.SaveSetting( keyName, _fileEntries[index] );
                 else
-                    settings.RemoveSetting( keyName );
+                    _userSettings.RemoveSetting( keyName );
             }
 
             // Remove legacy entries here
-            settings.RemoveGroup("RecentProjects");
+            _userSettings.RemoveGroup("RecentProjects");
         }
 
         private string GetRecentFileKey( string prefix, int index )
@@ -133,16 +131,43 @@ namespace NUnit.Engine.Services
         }
         #endregion
 
-        #region IService Members
+        #region Service Overrides
 
-        public void UnloadService()
+        public override void StopService()
         {
-            SaveEntriesToSettings();
+            try
+            {
+                SaveEntriesToSettings();
+            }
+            finally
+            {
+                Status = ServiceStatus.Stopped;
+            }
         }
 
-        public void InitializeService()
+        public override void StartService()
         {
-            LoadEntriesFromSettings();
+            try
+            {
+                // RecentFilesService requires SettingsService
+                _userSettings = ServiceContext.GetService<ISettings>();
+
+                // Anything returned from ServiceContext is an IService
+                if (_userSettings != null && ((IService)_userSettings).Status == ServiceStatus.Started)
+                {
+                    LoadEntriesFromSettings();
+                    Status = ServiceStatus.Started;
+                }
+                else
+                {
+                    Status = ServiceStatus.Error;
+                }
+            }
+            catch
+            {
+                Status = ServiceStatus.Error;
+                throw;
+            }
         }
 
         #endregion

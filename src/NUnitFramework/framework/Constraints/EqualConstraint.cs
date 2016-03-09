@@ -22,9 +22,10 @@
 // ***********************************************************************
 
 using System;
-using System.IO;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using NUnit.Framework.Compatibility;
 
 namespace NUnit.Framework.Constraints
 {
@@ -164,6 +165,23 @@ namespace NUnit.Framework.Constraints
 
             _tolerance = new Tolerance(amount);
             return this;
+        }
+
+        /// <summary>
+        /// Flags the constraint to include <see cref="DateTimeOffset.Offset"/>
+        /// property in comparison of two <see cref="DateTimeOffset"/> values.
+        /// </summary>
+        /// <remarks>
+        /// Using this modifier does not allow to use the <see cref="Within"/>
+        /// constraint modifier.
+        /// </remarks>
+        public EqualConstraint WithSameOffset
+        {
+            get 
+            { 
+                _comparer.WithSameOffset = true;
+                return this;
+            }
         }
 
         /// <summary>
@@ -392,7 +410,7 @@ namespace NUnit.Framework.Constraints
             if (arg != null)
             {
                 Type argType = arg.GetType();
-                Type genericTypeDefinition = argType.IsGenericType ? argType.GetGenericTypeDefinition() : null;
+                Type genericTypeDefinition = argType.GetTypeInfo().IsGenericType ? argType.GetGenericTypeDefinition() : null;
 
                 if (genericTypeDefinition == typeof(ArraySegment<>) && argType.GetProperty("Array").GetValue(arg, null) == null)
                 {

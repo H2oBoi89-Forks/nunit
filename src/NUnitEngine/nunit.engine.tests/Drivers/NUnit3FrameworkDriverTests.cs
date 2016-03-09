@@ -35,10 +35,13 @@ namespace NUnit.Engine.Drivers.Tests
     // Functional tests of the NUnitFrameworkDriver calling into the framework.
     public class NUnit3FrameworkDriverTests
     {
-        private string MOCK_ASSEMBLY = "mock-nunit-assembly.exe";
+        private const string MOCK_ASSEMBLY = "mock-assembly.exe";
         private const string MISSING_FILE = "junk.dll";
+        private const string NUNIT_FRAMEWORK = "nunit.framework";
+        private const string LOAD_MESSAGE = "Method called without calling Load first";
 
         private IDictionary<string, object> _settings = new Dictionary<string, object>();
+
         private NUnit3FrameworkDriver _driver;
         private string _mockAssemblyPath;
 
@@ -46,12 +49,12 @@ namespace NUnit.Engine.Drivers.Tests
         public void CreateDriver()
         {
             _mockAssemblyPath = System.IO.Path.Combine(TestContext.CurrentContext.TestDirectory, MOCK_ASSEMBLY);
-            _driver = new NUnit3FrameworkDriver(AppDomain.CurrentDomain, _mockAssemblyPath, _settings);
+            _driver = new NUnit3FrameworkDriver(AppDomain.CurrentDomain);
         }
 
         #region Construction Test
         //[Test]
-        //public void ConstructContoller()
+        //public void ConstructController()
         //{
         //    Assert.That(_controller..Builder, Is.TypeOf<DefaultTestAssemblyBuilder>());
         //    Assert.That(_controller.Runner, Is.TypeOf<DefaultTestAssemblyRunner>());
@@ -61,7 +64,7 @@ namespace NUnit.Engine.Drivers.Tests
 
         public void ConstructController_MissingFile_ThrowsArgumentInvalid()
         {
-            Assert.That(new NUnit3FrameworkDriver(AppDomain.CurrentDomain, MISSING_FILE, _settings), Throws.ArgumentException);
+            Assert.That(new NUnit3FrameworkDriver(AppDomain.CurrentDomain), Throws.ArgumentException);
         }
         #endregion
 
@@ -69,7 +72,7 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void Load_GoodFile_ReturnsRunnableSuite()
         {
-            var result = XmlHelper.CreateXmlNode(_driver.Load());
+            var result = XmlHelper.CreateXmlNode(_driver.Load(_mockAssemblyPath, _settings));
 
             Assert.That(result.Name, Is.EqualTo("test-suite"));
             Assert.That(result.GetAttribute("type"), Is.EqualTo("Assembly"));
@@ -83,8 +86,8 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void Explore_AfterLoad_ReturnsRunnableSuite()
         {
-            _driver.Load();
-            var result = XmlHelper.CreateXmlNode(_driver.Explore(TestFilter.Empty));
+            _driver.Load(_mockAssemblyPath, _settings);
+            var result = XmlHelper.CreateXmlNode(_driver.Explore(TestFilter.Empty.Text));
 
             Assert.That(result.Name, Is.EqualTo("test-suite"));
             Assert.That(result.GetAttribute("type"), Is.EqualTo("Assembly"));
@@ -96,11 +99,11 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void ExploreTestsAction_WithoutLoad_ThrowsInvalidOperationException()
         {
-            var ex = Assert.Catch(() => _driver.Explore(TestFilter.Empty));
+            var ex = Assert.Catch(() => _driver.Explore(TestFilter.Empty.Text));
             if (ex is System.Reflection.TargetInvocationException)
                 ex = ex.InnerException;
             Assert.That(ex, Is.TypeOf<InvalidOperationException>());
-            Assert.That(ex.Message, Is.EqualTo("The Explore method was called but no test has been loaded"));
+            Assert.That(ex.Message, Is.EqualTo(LOAD_MESSAGE));
         }
         #endregion
 
@@ -108,18 +111,18 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void CountTestsAction_AfterLoad_ReturnsCorrectCount()
         {
-            _driver.Load();
-            Assert.That(_driver.CountTestCases(TestFilter.Empty), Is.EqualTo(MockAssembly.Tests - MockAssembly.Explicit));
+            _driver.Load(_mockAssemblyPath, _settings);
+            Assert.That(_driver.CountTestCases(TestFilter.Empty.Text), Is.EqualTo(MockAssembly.Tests));
         }
 
         [Test]
         public void CountTestsAction_WithoutLoad_ThrowsInvalidOperationException()
         {
-            var ex = Assert.Catch(() => _driver.CountTestCases(TestFilter.Empty));
+            var ex = Assert.Catch(() => _driver.CountTestCases(TestFilter.Empty.Text));
             if (ex is System.Reflection.TargetInvocationException)
                 ex = ex.InnerException;
             Assert.That(ex, Is.TypeOf<InvalidOperationException>());
-            Assert.That(ex.Message, Is.EqualTo("The CountTestCases method was called but no test has been loaded"));
+            Assert.That(ex.Message, Is.EqualTo(LOAD_MESSAGE));
         }
         #endregion
 
@@ -127,8 +130,8 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void RunTestsAction_AfterLoad_ReturnsRunnableSuite()
         {
-            _driver.Load();
-            var result = XmlHelper.CreateXmlNode(_driver.Run(new NullListener(), TestFilter.Empty));
+            _driver.Load(_mockAssemblyPath, _settings);
+            var result = XmlHelper.CreateXmlNode(_driver.Run(new NullListener(), TestFilter.Empty.Text));
 
             Assert.That(result.Name, Is.EqualTo("test-suite"));
             Assert.That(result.GetAttribute("type"), Is.EqualTo("Assembly"));
@@ -137,7 +140,7 @@ namespace NUnit.Engine.Drivers.Tests
             Assert.That(result.GetAttribute("result"), Is.EqualTo("Failed"));
             Assert.That(result.GetAttribute("passed"), Is.EqualTo(MockAssembly.Success.ToString()));
             Assert.That(result.GetAttribute("failed"), Is.EqualTo(MockAssembly.ErrorsAndFailures.ToString()));
-            Assert.That(result.GetAttribute("skipped"), Is.EqualTo((MockAssembly.Ignored).ToString()));
+            Assert.That(result.GetAttribute("skipped"), Is.EqualTo(MockAssembly.Skipped.ToString()));
             Assert.That(result.GetAttribute("inconclusive"), Is.EqualTo(MockAssembly.Inconclusive.ToString()));
             Assert.That(result.SelectNodes("test-suite").Count, Is.GreaterThan(0), "Explore result should have child tests");
         }
@@ -145,11 +148,11 @@ namespace NUnit.Engine.Drivers.Tests
         [Test]
         public void RunTestsAction_WithoutLoad_ThrowsInvalidOperationException()
         {
-            var ex = Assert.Catch(() => _driver.Run(new NullListener(), TestFilter.Empty));
+            var ex = Assert.Catch(() => _driver.Run(new NullListener(), TestFilter.Empty.Text));
             if (ex is System.Reflection.TargetInvocationException)
                 ex = ex.InnerException;
             Assert.That(ex, Is.TypeOf<InvalidOperationException>());
-            Assert.That(ex.Message, Is.EqualTo("The Run method was called but no test has been loaded"));
+            Assert.That(ex.Message, Is.EqualTo(LOAD_MESSAGE));
         }
         #endregion
 

@@ -112,7 +112,7 @@ namespace NUnit.Framework.Internal
             ExpectFailure( attr, "Not supported under culture fr-FR" );
         }
 
-#if !NETCF
+#if !NETCF && !PORTABLE
         [Test,SetCulture("fr-FR")]
         public void LoadWithFrenchCulture()
         {
@@ -149,33 +149,6 @@ namespace NUnit.Framework.Internal
                 Assert.AreEqual( RunState.Skipped, test.RunState, test.Name );
         }
 
-#if !PORTABLE
-        [Test]
-        public void SettingInvalidCultureOnFixtureGivesError()
-        {
-            ITestResult result = TestBuilder.RunTestFixture(typeof(FixtureWithInvalidSetCultureAttribute));
-            Assert.AreEqual(ResultState.Error, result.ResultState);
-            RuntimeFramework current = RuntimeFramework.CurrentFramework;
-            string expectedException = current.ClrVersion.Major == 4
-              ? "System.Globalization.CultureNotFoundException"
-              : "System.ArgumentException";
-            Assert.That(result.Message, Does.StartWith(expectedException));
-            Assert.That(result.Message, Does.Contain("xx-XX").IgnoreCase);
-        }
-
-        [Test]
-        public void SettingInvalidCultureOnTestGivesError()
-        {
-            ITestResult result = TestBuilder.RunTestCase(typeof(FixtureWithInvalidSetCultureAttributeOnTest), "InvalidCultureSet");
-            Assert.AreEqual(ResultState.Error, result.ResultState);
-            RuntimeFramework current = RuntimeFramework.CurrentFramework;
-            string expectedException = current.ClrVersion.Major == 4
-              ? "System.Globalization.CultureNotFoundException"
-              : "System.ArgumentException";
-            Assert.That(result.Message, Does.StartWith(expectedException));
-            Assert.That(result.Message, Does.Contain("xx-XX").IgnoreCase);
-        }
-#endif
         [TestFixture, SetCulture("en-GB")]
         public class NestedFixture
         {

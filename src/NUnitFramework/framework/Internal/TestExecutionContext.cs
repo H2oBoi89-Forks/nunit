@@ -8,10 +8,10 @@
 // distribute, sublicense, and/or sell copies of the Software, and to
 // permit persons to whom the Software is furnished to do so, subject to
 // the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be
 // included in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 // EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -22,38 +22,39 @@
 // ***********************************************************************
 
 using System;
-using System.IO;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
+using NUnit.Framework.Constraints;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal.Execution;
 
 #if !SILVERLIGHT && !NETCF && !PORTABLE
 using System.Runtime.Remoting.Messaging;
 using System.Security.Principal;
+using NUnit.Framework.Compatibility;
 #endif
 
 namespace NUnit.Framework.Internal
 {
     /// <summary>
     /// Helper class used to save and restore certain static or
-    /// singleton settings in the environment that affect tests 
+    /// singleton settings in the environment that affect tests
     /// or which might be changed by the user tests.
-    /// 
+    ///
     /// An internal class is used to hold settings and a stack
     /// of these objects is pushed and popped as Save and Restore
     /// are called.
     /// </summary>
     public class TestExecutionContext
 #if !SILVERLIGHT && !NETCF && !PORTABLE
-        : MarshalByRefObject, ILogicalThreadAffinative
+        : LongLivedMarshalByRefObject, ILogicalThreadAffinative
 #endif
     {
         // NOTE: Be very careful when modifying this class. It uses
-        // conditional compilation extensively and you must give 
+        // conditional compilation extensively and you must give
         // thought to whether any new features will be supported
         // on each platform. In particular, instance fields,
         // properties, initialization and restoration must all
@@ -81,7 +82,7 @@ namespace NUnit.Framework.Internal
         /// </summary>
         private int _assertCount;
 
-        private RandomGenerator _randomGenerator;
+        private Randomizer _randomGenerator;
 
         private IWorkItemDispatcher _dispatcher;
 
@@ -117,8 +118,8 @@ namespace NUnit.Framework.Internal
         public TestExecutionContext()
         {
             _priorContext = null;
-            this.TestCaseTimeout = 0;
-            this.UpstreamActions = new List<ITestAction>();
+            TestCaseTimeout = 0;
+            UpstreamActions = new List<ITestAction>();
 
             _currentCulture = CultureInfo.CurrentCulture;
             _currentUICulture = CultureInfo.CurrentUICulture;
@@ -126,34 +127,38 @@ namespace NUnit.Framework.Internal
 #if !NETCF && !SILVERLIGHT && !PORTABLE
             _currentPrincipal = Thread.CurrentPrincipal;
 #endif
+
+            CurrentValueFormatter = (val) => MsgUtils.DefaultValueFormatter(val);
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TestExecutionContext"/> class.
         /// </summary>
         /// <param name="other">An existing instance of TestExecutionContext.</param>
-        public TestExecutionContext( TestExecutionContext other )
+        public TestExecutionContext(TestExecutionContext other)
         {
             _priorContext = other;
 
-            this.CurrentTest = other.CurrentTest;
-            this.CurrentResult = other.CurrentResult;
-            this.TestObject = other.TestObject;
-            this.WorkDirectory = other.WorkDirectory;
+            CurrentTest = other.CurrentTest;
+            CurrentResult = other.CurrentResult;
+            TestObject = other.TestObject;
+            WorkDirectory = other.WorkDirectory;
             _listener = other._listener;
-            this.StopOnError = other.StopOnError;
-            this.TestCaseTimeout = other.TestCaseTimeout;
-            this.UpstreamActions = new List<ITestAction>(other.UpstreamActions);
+            StopOnError = other.StopOnError;
+            TestCaseTimeout = other.TestCaseTimeout;
+            UpstreamActions = new List<ITestAction>(other.UpstreamActions);
 
-            _currentCulture = CultureInfo.CurrentCulture;
-            _currentUICulture = CultureInfo.CurrentUICulture;
+            _currentCulture = other.CurrentCulture;
+            _currentUICulture = other.CurrentUICulture;
 
 #if !NETCF && !SILVERLIGHT && !PORTABLE
-            _currentPrincipal = Thread.CurrentPrincipal;
+            _currentPrincipal = other.CurrentPrincipal;
 #endif
 
-            this.Dispatcher = other.Dispatcher;
-            this.ParallelScope = other.ParallelScope;
+            CurrentValueFormatter = other.CurrentValueFormatter;
+
+            Dispatcher = other.Dispatcher;
+            ParallelScope = other.ParallelScope;
         }
 
         #endregion
@@ -167,7 +172,7 @@ namespace NUnit.Framework.Internal
         [ThreadStatic]
         private static TestExecutionContext current;
 #elif NETCF
-        private static TestExecutionContext current;
+        private static LocalDataStoreSlot slotContext = Thread.AllocateDataSlot();
 #else
         private static readonly string CONTEXT_KEY = "NUnit.Framework.TestContext";
 #endif
@@ -178,18 +183,27 @@ namespace NUnit.Framework.Internal
         /// <value>The current context.</value>
         public static TestExecutionContext CurrentContext
         {
-            get 
+            get
             {
                 // If a user creates a thread then the current context
                 // will be null. This also happens when the compiler
                 // automatically creates threads for async methods.
                 // We create a new context, which is automatically
                 // populated with _values taken from the current thread.
-#if SILVERLIGHT || NETCF || PORTABLE
+#if SILVERLIGHT || PORTABLE
                 if (current == null)
                     current = new TestExecutionContext();
 
-                return current; 
+                return current;
+#elif NETCF
+                var current = (TestExecutionContext)Thread.GetData(slotContext);
+                if (current == null)
+                {
+                    current = new TestExecutionContext();
+                    Thread.SetData(slotContext, current);
+                }
+
+                return current;
 #else
                 var context = GetTestExecutionContext();
                 if (context == null) // This can happen on Mono
@@ -201,10 +215,13 @@ namespace NUnit.Framework.Internal
                 return context;
 #endif
             }
-            private set 
-            { 
-#if SILVERLIGHT || NETCF || PORTABLE
+
+            private set
+            {
+#if SILVERLIGHT || PORTABLE
                 current = value;
+#elif NETCF
+                Thread.SetData(slotContext, value);
 #else
                 if (value == null)
                     CallContext.FreeNamedDataSlot(CONTEXT_KEY);
@@ -262,7 +279,7 @@ namespace NUnit.Framework.Internal
             set
             {
                 _currentResult = value;
-                if(value != null)
+                if (value != null)
                     OutWriter = value.OutWriter;
             }
         }
@@ -277,7 +294,7 @@ namespace NUnit.Framework.Internal
         /// object on which tests are being executed.
         /// </summary>
         public object TestObject { get; set; }
-        
+
         /// <summary>
         /// Get or set the working directory
         /// </summary>
@@ -324,7 +341,7 @@ namespace NUnit.Framework.Internal
         /// <summary>
         /// The current WorkItemDispatcher
         /// </summary>
-        internal IWorkItemDispatcher Dispatcher 
+        internal IWorkItemDispatcher Dispatcher
         {
             get
             {
@@ -333,7 +350,7 @@ namespace NUnit.Framework.Internal
 
                 return _dispatcher;
             }
-            set { _dispatcher = value;  }
+            set { _dispatcher = value; }
         }
 
         /// <summary>
@@ -345,14 +362,12 @@ namespace NUnit.Framework.Internal
         /// <summary>
         /// Gets the RandomGenerator specific to this Test
         /// </summary>
-        public RandomGenerator RandomGenerator
+        public Randomizer RandomGenerator
         {
             get
             {
                 if (_randomGenerator == null)
-                {
-                    _randomGenerator = new RandomGenerator(CurrentTest.Seed);
-                }
+                    _randomGenerator = new Randomizer(CurrentTest.Seed);
                 return _randomGenerator;
             }
         }
@@ -389,7 +404,7 @@ namespace NUnit.Framework.Internal
             set
             {
                 _currentCulture = value;
-#if !NETCF
+#if !NETCF && !PORTABLE
                 Thread.CurrentThread.CurrentCulture = _currentCulture;
 #endif
             }
@@ -404,7 +419,7 @@ namespace NUnit.Framework.Internal
             set
             {
                 _currentUICulture = value;
-#if !NETCF
+#if !NETCF && !PORTABLE
                 Thread.CurrentThread.CurrentUICulture = _currentUICulture;
 #endif
             }
@@ -424,6 +439,11 @@ namespace NUnit.Framework.Internal
             }
         }
 #endif
+
+        /// <summary>
+        /// The current head of the ValueFormatter chain, copied from MsgUtils.ValueFormatter
+        /// </summary>
+        public ValueFormatter CurrentValueFormatter { get; private set; }
 
         #endregion
 
@@ -451,7 +471,7 @@ namespace NUnit.Framework.Internal
         /// </summary>
         public void EstablishExecutionEnvironment()
         {
-#if !NETCF
+#if !NETCF && !PORTABLE
             Thread.CurrentThread.CurrentCulture = _currentCulture;
             Thread.CurrentThread.CurrentUICulture = _currentUICulture;
 #endif
@@ -468,7 +488,7 @@ namespace NUnit.Framework.Internal
         /// </summary>
         public void IncrementAssertCount()
         {
-            System.Threading.Interlocked.Increment(ref _assertCount);
+            Interlocked.Increment(ref _assertCount);
         }
 
         /// <summary>
@@ -477,8 +497,17 @@ namespace NUnit.Framework.Internal
         public void IncrementAssertCount(int count)
         {
             // TODO: Temporary implementation
-            while(count-- > 0)
-                System.Threading.Interlocked.Increment(ref _assertCount);
+            while (count-- > 0)
+                Interlocked.Increment(ref _assertCount);
+        }
+
+        /// <summary>
+        /// Adds a new ValueFormatterFactory to the chain of formatters
+        /// </summary>
+        /// <param name="formatterFactory">The new factory</param>
+        public void AddFormatter(ValueFormatterFactory formatterFactory)
+        {
+            CurrentValueFormatter = formatterFactory(CurrentValueFormatter);
         }
 
         #endregion

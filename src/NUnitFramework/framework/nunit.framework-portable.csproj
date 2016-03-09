@@ -1,20 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
-    <MinimumVisualStudioVersion>10.0</MinimumVisualStudioVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{D6FBBB3A-F6B8-45BB-B657-A7226AB96624}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>NUnit</RootNamespace>
+    <RootNamespace>NUnit.Framework</RootNamespace>
     <AssemblyName>nunit.framework</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-    <TargetFrameworkProfile>Profile344</TargetFrameworkProfile>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile>Profile259</TargetFrameworkProfile>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <IntermediateOutputPath>obj\$(Configuration)\portable\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -40,7 +39,7 @@
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyOriginatorKeyFile>nunit.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>..\..\nunit.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <!-- A reference to the entire .NET Framework is automatically included -->
@@ -48,10 +47,37 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\CommonAssemblyInfo.cs">
-      <Link>CommonAssemblyInfo.cs</Link>
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="..\..\Common\nunit\AssemblyHelper.cs">
       <Link>Internal\AssemblyHelper.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\AttributeHelper.cs">
+      <Link>Compatibility\AttributeHelper.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\BindingFlags.cs">
+      <Link>Compatibility\BindingFlags.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\ICallbackEventHandler.cs">
+      <Link>Compatibility\ICallbackEventHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\LongLivedMarshalByRefObject.cs">
+      <Link>Compatibility\LongLivedMarshalByRefObject.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\Path.cs">
+      <Link>Compatibility\Path.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\ReflectionExtensions.cs">
+      <Link>Compatibility\ReflectionExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\SerializableAttribute.cs">
+      <Link>Compatibility\SerializableAttribute.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Compatibility\Stopwatch.cs">
+      <Link>Compatibility\Stopwatch.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\nunit\Env.cs">
+      <Link>Env.cs</Link>
     </Compile>
     <Compile Include="..\..\Common\nunit\Guard.cs">
       <Link>Guard.cs</Link>
@@ -75,7 +101,7 @@
       <Link>Api\PackageSettings.cs</Link>
     </Compile>
     <Compile Include="..\FrameworkVersion.cs">
-      <Link>FrameworkVersion.cs</Link>
+      <Link>Properties\FrameworkVersion.cs</Link>
     </Compile>
     <Compile Include="ActionTargets.cs" />
     <Compile Include="Api\DefaultTestAssemblyBuilder.cs" />
@@ -91,6 +117,9 @@
     </Compile>
     <Compile Include="Assert.cs" />
     <Compile Include="Assert.Equality.cs">
+      <DependentUpon>Assert.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Assert.Exceptions.Async.cs">
       <DependentUpon>Assert.cs</DependentUpon>
     </Compile>
     <Compile Include="Assert.Exceptions.cs">
@@ -115,14 +144,15 @@
     <Compile Include="Attributes\DatapointSourceAttribute.cs" />
     <Compile Include="Attributes\DescriptionAttribute.cs" />
     <Compile Include="Attributes\ExplicitAttribute.cs" />
-    <Compile Include="Attributes\FixtureBuilderAttribute.cs" />
     <Compile Include="Attributes\IgnoreAttribute.cs" />
     <Compile Include="Attributes\IncludeExcludeAttribute.cs" />
+    <Compile Include="Attributes\TestAssemblyDirectoryResolveAttribute.cs" />
     <Compile Include="Attributes\LevelOfParallelismAttribute.cs" />
     <Compile Include="Attributes\MaxTimeAttribute.cs" />
     <Compile Include="Attributes\NUnitAttribute.cs" />
     <Compile Include="Attributes\OneTimeSetUpAttribute.cs" />
     <Compile Include="Attributes\OneTimeTearDownAttribute.cs" />
+    <Compile Include="Attributes\OrderAttribute.cs" />
     <Compile Include="Attributes\PairwiseAttribute.cs" />
     <Compile Include="Attributes\ParallelizableAttribute.cs" />
     <Compile Include="Attributes\ParallelScope.cs" />
@@ -134,6 +164,7 @@
     <Compile Include="Attributes\RequiresMTAAtribute.cs" />
     <Compile Include="Attributes\RequiresSTAAttribute.cs" />
     <Compile Include="Attributes\RequiresThreadAttribute.cs" />
+    <Compile Include="Attributes\RetryAttribute.cs" />
     <Compile Include="Attributes\SequentialAttribute.cs" />
     <Compile Include="Attributes\SetCultureAttribute.cs" />
     <Compile Include="Attributes\SetUICultureAttribute.cs" />
@@ -143,10 +174,10 @@
     <Compile Include="Attributes\TestActionAttribute.cs" />
     <Compile Include="Attributes\TestAttribute.cs" />
     <Compile Include="Attributes\TestCaseAttribute.cs" />
-    <Compile Include="Attributes\TestCaseBuilderAttribute.cs" />
     <Compile Include="Attributes\TestCaseSourceAttribute.cs" />
     <Compile Include="Attributes\TestFixtureAttribute.cs" />
     <Compile Include="Attributes\TestFixtureSetUpAttribute.cs" />
+    <Compile Include="Attributes\TestFixtureSourceAttribute.cs" />
     <Compile Include="Attributes\TestFixtureTearDownAttribute.cs" />
     <Compile Include="Attributes\TestOfAttribute.cs" />
     <Compile Include="Attributes\TheoryAttribute.cs" />
@@ -154,10 +185,6 @@
     <Compile Include="Attributes\ValuesAttribute.cs" />
     <Compile Include="Attributes\ValueSourceAttribute.cs" />
     <Compile Include="CollectionAssert.cs" />
-    <Compile Include="Compatibility\AttributeHelper.cs" />
-    <Compile Include="Compatibility\Path.cs" />
-    <Compile Include="Compatibility\SerializableAttribute.cs" />
-    <Compile Include="Compatibility\Stopwatch.cs" />
     <Compile Include="Constraints\AllItemsConstraint.cs" />
     <Compile Include="Constraints\AndConstraint.cs" />
     <Compile Include="Constraints\AssignableFromConstraint.cs" />
@@ -172,6 +199,7 @@
     <Compile Include="Constraints\CollectionItemsEqualConstraint.cs" />
     <Compile Include="Constraints\CollectionOrderedConstraint.cs" />
     <Compile Include="Constraints\CollectionSubsetConstraint.cs" />
+    <Compile Include="Constraints\CollectionSupersetConstraint.cs" />
     <Compile Include="Constraints\CollectionTally.cs" />
     <Compile Include="Constraints\ComparisonAdapter.cs" />
     <Compile Include="Constraints\ComparisonConstraint.cs" />
@@ -183,6 +211,7 @@
     <Compile Include="Constraints\ContainsConstraint.cs" />
     <Compile Include="Constraints\DelayedConstraint.cs" />
     <Compile Include="Constraints\DictionaryContainsKeyConstraint.cs" />
+    <Compile Include="Constraints\DictionaryContainsValueConstraint.cs" />
     <Compile Include="Constraints\EmptyCollectionConstraint.cs" />
     <Compile Include="Constraints\EmptyConstraint.cs" />
     <Compile Include="Constraints\EmptyDirectoryConstraint.cs" />
@@ -193,6 +222,7 @@
     <Compile Include="Constraints\EqualityAdapter.cs" />
     <Compile Include="Constraints\ExactCountConstraint.cs" />
     <Compile Include="Constraints\ExactTypeConstraint.cs" />
+    <Compile Include="Constraints\ExceptionNotThrownConstraint.cs" />
     <Compile Include="Constraints\ExceptionTypeConstraint.cs" />
     <Compile Include="Constraints\FalseConstraint.cs" />
     <Compile Include="Constraints\FileExistsConstraint.cs" />
@@ -260,7 +290,6 @@
     <Compile Include="Contains.cs" />
     <Compile Include="DirectoryAssert.cs" />
     <Compile Include="Does.cs" />
-    <Compile Include="Env.cs" />
     <Compile Include="Exceptions\AssertionException.cs" />
     <Compile Include="Exceptions\IgnoreException.cs" />
     <Compile Include="Exceptions\InconclusiveException.cs" />
@@ -273,25 +302,32 @@
     <Compile Include="Interfaces\IApplyToTest.cs" />
     <Compile Include="Interfaces\ICombiningStrategy.cs" />
     <Compile Include="Interfaces\ICommandWrapper.cs" />
+    <Compile Include="Interfaces\IDisposableFixture.cs" />
     <Compile Include="Interfaces\IFixtureBuilder.cs" />
     <Compile Include="Interfaces\IImplyFixture.cs" />
+    <Compile Include="Interfaces\IMethodInfo.cs" />
     <Compile Include="Interfaces\IParameterDataProvider.cs" />
     <Compile Include="Interfaces\IParameterDataSource.cs" />
+    <Compile Include="Interfaces\IParameterInfo.cs" />
     <Compile Include="Interfaces\IPropertyBag.cs" />
+    <Compile Include="Interfaces\IReflectionInfo.cs" />
     <Compile Include="Interfaces\ISimpleTestBuilder.cs" />
     <Compile Include="Interfaces\ISuiteBuilder.cs" />
     <Compile Include="Interfaces\ITest.cs" />
     <Compile Include="Interfaces\ITestBuilder.cs" />
     <Compile Include="Interfaces\ITestCaseBuilder.cs" />
     <Compile Include="Interfaces\ITestCaseData.cs" />
+    <Compile Include="Interfaces\ITestData.cs" />
     <Compile Include="Interfaces\ITestFilter.cs" />
+    <Compile Include="Interfaces\ITestFixtureData.cs" />
     <Compile Include="Interfaces\ITestListener.cs" />
     <Compile Include="Interfaces\ITestResult.cs" />
+    <Compile Include="Interfaces\ITypeInfo.cs" />
     <Compile Include="Interfaces\IXmlNodeBuilder.cs" />
     <Compile Include="Interfaces\ResultState.cs" />
     <Compile Include="Interfaces\RunState.cs" />
     <Compile Include="Interfaces\TestStatus.cs" />
-    <Compile Include="Interfaces\XmlNode.cs" />
+    <Compile Include="Interfaces\TNode.cs" />
     <Compile Include="Internal\ActionsHelper.cs" />
     <Compile Include="Internal\AsyncInvocationRegion.cs" />
     <Compile Include="Internal\Builders\CombinatorialStrategy.cs" />
@@ -303,6 +339,7 @@
     <Compile Include="Internal\Builders\NUnitTestFixtureBuilder.cs" />
     <Compile Include="Internal\Builders\PairwiseStrategy.cs" />
     <Compile Include="Internal\Builders\ParameterDataProvider.cs" />
+    <Compile Include="Internal\Builders\ParameterDataSourceProvider.cs" />
     <Compile Include="Internal\Builders\ProviderCache.cs" />
     <Compile Include="Internal\Builders\SequentialStrategy.cs" />
     <Compile Include="Internal\Commands\ApplyChangesToContextCommand.cs" />
@@ -311,7 +348,6 @@
     <Compile Include="Internal\Commands\MaxTimeCommand.cs" />
     <Compile Include="Internal\Commands\OneTimeSetUpCommand.cs" />
     <Compile Include="Internal\Commands\OneTimeTearDownCommand.cs" />
-    <Compile Include="Internal\Commands\RepeatedTestCommand.cs" />
     <Compile Include="Internal\Commands\SetUpTearDownCommand.cs" />
     <Compile Include="Internal\Commands\SetUpTearDownItem.cs" />
     <Compile Include="Internal\Commands\SkipCommand.cs" />
@@ -341,21 +377,27 @@
     <Compile Include="Internal\Execution\WorkShift.cs" />
     <Compile Include="Internal\Filters\AndFilter.cs" />
     <Compile Include="Internal\Filters\CategoryFilter.cs" />
+    <Compile Include="Internal\Filters\ClassNameFilter.cs" />
+    <Compile Include="Internal\Filters\CompositeFilter.cs" />
+    <Compile Include="Internal\Filters\FullNameFilter.cs" />
     <Compile Include="Internal\Filters\IdFilter.cs" />
+    <Compile Include="Internal\Filters\MethodNameFilter.cs" />
     <Compile Include="Internal\Filters\NotFilter.cs" />
     <Compile Include="Internal\Filters\OrFilter.cs" />
-    <Compile Include="Internal\Filters\SimpleNameFilter.cs" />
+    <Compile Include="Internal\Filters\PropertyFilter.cs" />
+    <Compile Include="Internal\Filters\TestNameFilter.cs" />
     <Compile Include="Internal\Filters\ValueMatchFilter.cs" />
+    <Compile Include="Internal\GenericMethodHelper.cs" />
+    <Compile Include="Internal\InvalidDataSourceException.cs" />
     <Compile Include="Internal\InvalidTestFixtureException.cs" />
-    <Compile Include="Internal\MethodHelper.cs" />
+    <Compile Include="Internal\MethodWrapper.cs" />
     <Compile Include="Internal\NetCFExtensions.cs" />
     <Compile Include="Internal\NUnitException.cs" />
     <Compile Include="Internal\OSPlatform.cs" />
-    <Compile Include="Internal\ParameterSet.cs" />
+    <Compile Include="Internal\ParameterWrapper.cs" />
     <Compile Include="Internal\PlatformHelper.cs" />
     <Compile Include="Internal\PropertyBag.cs" />
     <Compile Include="Internal\PropertyNames.cs" />
-    <Compile Include="Internal\RandomGenerator.cs" />
     <Compile Include="Internal\Randomizer.cs" />
     <Compile Include="Internal\Reflect.cs" />
     <Compile Include="Internal\Results\TestCaseResult.cs" />
@@ -364,10 +406,14 @@
     <Compile Include="Internal\RuntimeFramework.cs" />
     <Compile Include="Internal\StackFilter.cs" />
     <Compile Include="Internal\StringUtil.cs" />
+    <Compile Include="Internal\TestCaseParameters.cs" />
     <Compile Include="Internal\TestExecutionContext.cs" />
     <Compile Include="Internal\TestExecutionStatus.cs" />
     <Compile Include="Internal\TestFilter.cs" />
+    <Compile Include="Internal\TestFixtureParameters.cs" />
     <Compile Include="Internal\TestListener.cs" />
+    <Compile Include="Internal\TestNameGenerator.cs" />
+    <Compile Include="Internal\TestParameters.cs" />
     <Compile Include="Internal\TestProgressReporter.cs" />
     <Compile Include="Internal\Tests\ParameterizedFixtureSuite.cs" />
     <Compile Include="Internal\Tests\ParameterizedMethodSuite.cs" />
@@ -379,6 +425,7 @@
     <Compile Include="Internal\Tests\TestSuite.cs" />
     <Compile Include="Internal\ThreadUtility.cs" />
     <Compile Include="Internal\TypeHelper.cs" />
+    <Compile Include="Internal\TypeWrapper.cs" />
     <Compile Include="Is.cs" />
     <Compile Include="ITestAction.cs" />
     <Compile Include="Iz.cs" />
@@ -389,12 +436,14 @@
     <Compile Include="StringAssert.cs" />
     <Compile Include="TestCaseData.cs" />
     <Compile Include="TestContext.cs" />
+    <Compile Include="TestFixtureData.cs" />
     <Compile Include="Throws.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="nunit.snk" />
+    <None Include="..\..\nunit.snk">
+      <Link>nunit.snk</Link>
+    </None>
   </ItemGroup>
-  <ItemGroup />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

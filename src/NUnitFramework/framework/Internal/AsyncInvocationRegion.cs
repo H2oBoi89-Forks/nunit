@@ -21,14 +21,15 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
-#if NET_4_0 || NET_4_5
+#if NET_4_0 || NET_4_5 || PORTABLE
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using NUnit.Framework.Compatibility;
 
-#if NET_4_5
+#if NET_4_5 || PORTABLE
 using System.Runtime.ExceptionServices;
 #endif
 
@@ -39,31 +40,17 @@ namespace NUnit.Framework.Internal
         private const string TaskTypeName = "System.Threading.Tasks.Task";
         private const string AsyncAttributeTypeName = "System.Runtime.CompilerServices.AsyncStateMachineAttribute";
 
-#if NET_4_0
-        private static readonly Action<Exception> PreserveStackTrace;
-
-        static AsyncInvocationRegion()
-        {
-            var method = typeof(Exception).GetMethod("InternalPreserveStackTrace", BindingFlags.Instance | BindingFlags.NonPublic);
-
-            if (method != null)
-            {
-                PreserveStackTrace = (Action<Exception>)Delegate.CreateDelegate(typeof (Action<Exception>), method);
-            }
-            else 
-            {
-                PreserveStackTrace = _ => { };
-            }
-        }
-#endif
-
         private AsyncInvocationRegion()
         {
         }
 
         public static AsyncInvocationRegion Create(Delegate @delegate)
         {
+#if PORTABLE
+            return Create(@delegate.GetMethodInfo());
+#else
             return Create(@delegate.Method);
+#endif
         }
 
         public static AsyncInvocationRegion Create(MethodInfo method)
@@ -86,7 +73,11 @@ at wrapping a non-async method invocation in an async region was done");
 
         public static bool IsAsyncOperation(Delegate @delegate)
         {
+#if PORTABLE
+            return IsAsyncOperation(@delegate.GetMethodInfo());
+#else
             return IsAsyncOperation(@delegate.Method);
+#endif
         }
 
         /// <summary>
@@ -104,9 +95,10 @@ at wrapping a non-async method invocation in an async region was done");
         {
             private const string TaskWaitMethod = "Wait";
             private const string TaskResultProperty = "Result";
+            private const string VoidTaskResultType = "VoidTaskResult";
             private const string SystemAggregateException = "System.AggregateException";
             private const string InnerExceptionsProperty = "InnerExceptions";
-            private const BindingFlags TaskResultPropertyBindingFlags = BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.Public;
+            private const BindingFlags TaskResultPropertyBindingFlags = BindingFlags.Instance | BindingFlags.Public;
 
             public override object WaitForPendingOperationsToComplete(object invocationResult)
             {
@@ -117,13 +109,12 @@ at wrapping a non-async method invocation in an async region was done");
                 catch (TargetInvocationException e)
                 {
                     IList<Exception> innerExceptions = GetAllExceptions(e.InnerException);
-
-#if NET_4_5
-                    ExceptionDispatchInfo.Capture(innerExceptions[0]).Throw();
-#elif NET_4_0
-                    PreserveStackTrace(innerExceptions[0]);
-                    throw innerExceptions[0];
-#endif
+                    ExceptionHelper.Rethrow(innerExceptions[0]);
+                }
+                var args = invocationResult.GetType().GetGenericArguments();
+                if (args != null && args.Length == 1 && args[0].Name == VoidTaskResultType)
+                {
+                    return null;
                 }
 
                 PropertyInfo taskResultProperty = invocationResult.GetType().GetProperty(TaskResultProperty, TaskResultPropertyBindingFlags);

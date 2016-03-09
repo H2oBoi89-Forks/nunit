@@ -40,7 +40,8 @@ namespace NUnit.Framework.Internal
         const string CommonOSPlatforms =
             "Win,Win32,Win32S,Win32NT,Win32Windows,WinCE,Win95,Win98,WinMe,NT3,NT4,NT5,NT6," +
             "Win2008Server,Win2008ServerR2,Win2012Server,Win2012ServerR2," +
-            "Win2K,WinXP,Win2003Server,Vista,Win7,Windows7,Win8,Windows8,Win8.1,Windows8.1,Unix,Linux";
+            "Win2K,WinXP,Win2003Server,Vista,Win7,Windows7,Win8,Windows8,"+
+            "Win8.1,Windows8.1,Win10,Windows10,WindowsServer10,Unix,Linux";
 
         /// <summary>
         /// Comma-delimited list of all supported OS platform constants
@@ -68,7 +69,7 @@ namespace NUnit.Framework.Internal
         }
 
         /// <summary>
-        /// Contruct a PlatformHelper for a particular operating
+        /// Construct a PlatformHelper for a particular operating
         /// system and common language runtime. Used in testing.
         /// </summary>
         /// <param name="os">OperatingSystem to be used</param>
@@ -245,18 +246,23 @@ namespace NUnit.Framework.Internal
                 case "WIN8.1":
                     isSupported = os.IsWindows81;
                     break;
+                case "WINDOWS10":
+                case "WIN10":
+                    isSupported = os.IsWindows10;
+                    break;
+                case "WINDOWSSERVER10":
+                    isSupported = os.IsWindowsServer10;
+                    break;
                 case "UNIX":
                 case "LINUX":
                     isSupported = os.IsUnix;
                     break;
-#if !NETCF
                 case "XBOX":
                     isSupported = os.IsXbox;
                     break;
                 case "MACOSX":
                     isSupported = os.IsMacOSX;
                     break;
-#endif
                 // These bitness tests relate to the process, not the OS.
                 // We can't use Environment.Is64BitProcess because it's
                 // only supported in NET 4.0 and higher.

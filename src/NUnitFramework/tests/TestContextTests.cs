@@ -25,18 +25,56 @@ using System.IO;
 using NUnit.Framework.Interfaces;
 using NUnit.TestData.TestContextData;
 using NUnit.TestUtilities;
+using NUnit.Framework.Internal;
 
 namespace NUnit.Framework.Tests
 {
     [TestFixture]
     public class TestContextTests
     {
+        private string _name;
+
+#if !SILVERLIGHT && !PORTABLE
+        private string _testDirectory;
+#endif
+        private string _workDirectory;
+
+        public TestContextTests()
+        {
+            _name = TestContext.CurrentContext.Test.Name;
+
+#if !SILVERLIGHT && !PORTABLE
+            _testDirectory = TestContext.CurrentContext.TestDirectory;
+#endif
+            _workDirectory = TestContext.CurrentContext.WorkDirectory;
+        }
+
+#if !SILVERLIGHT && !PORTABLE
+        [Test]
+        public void ConstructorCanAccessTestDirectory()
+        {
+            Assert.That(_testDirectory, Is.Not.Null);
+        }
+#endif
+
+        [Test]
+        public void ConstructorAccessWorkDirectory()
+        {
+            Assert.That(_workDirectory, Is.Not.Null);
+        }
+
         [Test]
         public void TestCanAccessItsOwnName()
         {
             Assert.That(TestContext.CurrentContext.Test.Name, Is.EqualTo("TestCanAccessItsOwnName"));
         }
-        
+
+        [Test]
+        public void ConstructorCanAccessFixtureName()
+        {
+            Assert.That(_name, Is.EqualTo("TestContextTests"));
+        }
+
         [TestCase(5)]
         public void TestCaseCanAccessItsOwnName(int x)
         {
@@ -72,7 +110,7 @@ namespace NUnit.Framework.Tests
         [Test]
         public void TestCanAccessItsOwnId()
         {
-            Assert.That(TestContext.CurrentContext.Test.ID, Is.GreaterThan(0));
+            Assert.That(TestContext.CurrentContext.Test.ID, Is.Not.Null.And.Not.Empty);
         }
 
         [Test]
@@ -88,7 +126,7 @@ namespace NUnit.Framework.Tests
             string workDirectory = TestContext.CurrentContext.WorkDirectory;
             Assert.NotNull(workDirectory);
             // SL tests may be running on the desktop
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !PORTABLE
             Assert.That(Directory.Exists(workDirectory), string.Format("Directory {0} does not exist", workDirectory));
 #endif
         }
@@ -171,7 +209,7 @@ namespace NUnit.Framework.Tests
             Assert.That(fixture.FailCount, Is.EqualTo(1));
             Assert.That(fixture.SkipCount, Is.EqualTo(3));
             Assert.That(fixture.InconclusiveCount, Is.EqualTo(4));
-            Assert.That(fixture.Message, Is.EqualTo("One or more child tests had errors"));
+            Assert.That(fixture.Message, Is.EqualTo(TestResult.CHILD_ERRORS_MESSAGE));
             Assert.That(fixture.StackTrace, Is.Null);
         }
     }
@@ -198,6 +236,10 @@ namespace NUnit.Framework.Tests
             Assert.That(context.Result.Outcome, Is.EqualTo(ResultState.Success));
             Assert.That(context.Result.PassCount, Is.EqualTo(1));
             Assert.That(context.Result.FailCount, Is.EqualTo(0));
+#if !PORTABLE && !SILVERLIGHT
+            Assert.That(context.TestDirectory, Is.Not.Null);
+            Assert.That(context.WorkDirectory, Is.Not.Null);
+#endif
         }
     }
 
@@ -233,8 +275,7 @@ namespace NUnit.Framework.Tests
             Assert.That(context.Result.Outcome, Is.EqualTo(ResultState.Success));
             Assert.That(context.Result.PassCount, Is.EqualTo(2));
             Assert.That(context.Result.FailCount, Is.EqualTo(0));
-            // TODO: Should we be counting Explicit?
-            Assert.That(context.Result.SkipCount, Is.EqualTo(0));
+            Assert.That(context.Result.SkipCount, Is.EqualTo(1));
         }
     }
 }

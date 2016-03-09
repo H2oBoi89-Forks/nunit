@@ -35,7 +35,7 @@ namespace NUnit.Engine.Internal
     /// SettingsGroup is the base class representing a group
     /// of user or system settings.
     /// </summary>
-    public class SettingsGroup : ISettings, IDisposable
+    public class SettingsGroup : ISettings
     {
         static Logger log = InternalTrace.GetLogger("SettingsGroup");
 
@@ -48,8 +48,8 @@ namespace NUnit.Engine.Internal
         /// <summary>
         /// Load the value of one of the group's settings
         /// </summary>
-        /// <param name="settingName">Name of setting to load</param>
-        /// <returns>Value of the setting or null</returns>
+        /// <param name="settingName">The name of setting to load</param>
+        /// <returns>The value of the setting</returns>
         public object GetSetting(string settingName)
         {
             return _settings.ContainsKey(settingName)
@@ -60,9 +60,9 @@ namespace NUnit.Engine.Internal
         /// <summary>
         /// Load the value of one of the group's settings or return a default value
         /// </summary>
-        /// <param name="settingName">Name of setting to load</param>
-        /// <param name="defaultValue">Value to return if the seeting is not present</param>
-        /// <returns>Value of the setting or the default</returns>
+        /// <param name="settingName">The name of setting to load</param>
+        /// <param name="defaultValue">The value to return if the setting is not present</param>
+        /// <returns>The value of the setting or the default</returns>
         public T GetSetting<T>(string settingName, T defaultValue)
         {
             object result = GetSetting(settingName);
@@ -93,7 +93,7 @@ namespace NUnit.Engine.Internal
         /// <summary>
         /// Remove a setting from the group
         /// </summary>
-        /// <param name="settingName">Name of the setting to remove</param>
+        /// <param name="settingName">The name of the setting to remove</param>
         public void RemoveSetting(string settingName)
         {
             _settings.Remove(settingName);
@@ -105,7 +105,7 @@ namespace NUnit.Engine.Internal
         /// <summary>
         /// Remove a group of settings
         /// </summary>
-        /// <param name="GroupName"></param>
+        /// <param name="groupName">The name of the group to remove</param>
         public void RemoveGroup(string groupName)
         {
             List<string> keysToRemove = new List<string>();
@@ -125,8 +125,8 @@ namespace NUnit.Engine.Internal
         /// <summary>
         /// Save the value of one of the group's settings
         /// </summary>
-        /// <param name="settingName">Name of the setting to save</param>
-        /// <param name="settingValue">Value to be saved</param>
+        /// <param name="settingName">The name of the setting to save</param>
+        /// <param name="settingValue">The value to be saved</param>
         public void SaveSetting(string settingName, object settingValue)
         {
             object oldValue = GetSetting(settingName);
@@ -147,20 +147,6 @@ namespace NUnit.Engine.Internal
                 Changed(this, new SettingsEventArgs(settingName));
         }
 
-        #endregion
-
-        #region IDisposable Members
-        /// <summary>
-        /// Dispose of this group by disposing of it's _settings implementation
-        /// </summary>
-        public void Dispose()
-        {
-            if (_settings != null)
-            {
-                //_settings.Dispose();
-                _settings = null;
-            }
-        }
         #endregion
     }
 }

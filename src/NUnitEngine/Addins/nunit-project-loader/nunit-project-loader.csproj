@@ -11,8 +11,6 @@
     <AssemblyName>nunit-project-loader</AssemblyName>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <ProductVersion>12.0.0</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -40,6 +38,7 @@
     <Compile Include="..\..\..\Common\nunit\XmlHelper.cs">
       <Link>XmlHelper.cs</Link>
     </Compile>
+    <Compile Include="StringHelper.cs" />
     <Compile Include="NUnitProject.cs" />
     <Compile Include="NUnitProjectLoader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -49,10 +48,8 @@
     <ProjectReference Include="..\..\nunit.engine.api\nunit.engine.api.csproj">
       <Project>{775FAD50-3623-4922-97C4-DFB29A8BE4C7}</Project>
       <Name>nunit.engine.api</Name>
+      <Private>False</Private>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="nunit-project-loader.addin.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

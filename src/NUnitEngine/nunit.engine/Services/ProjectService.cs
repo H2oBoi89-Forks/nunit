@@ -21,9 +21,10 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
+using System;
 using System.Collections.Generic;
+using System.IO;
 using NUnit.Common;
-using Mono.Addins;
 using NUnit.Engine.Extensibility;
 
 namespace NUnit.Engine.Services
@@ -31,38 +32,24 @@ namespace NUnit.Engine.Services
     /// <summary>
     /// Summary description for ProjectService.
     /// </summary>
-    public class ProjectService : IProjectLoader, IService
+    public class ProjectService : Service, IProjectService
     {
-        /// <summary>
-        /// List of all installed ProjectLoaders
-        /// </summary>
-        IList<IProjectLoader> _loaders = new List<IProjectLoader>();
+        Dictionary<string, ExtensionNode> _extensionIndex = new Dictionary<string, ExtensionNode>();
 
-        bool _isInitialized;
-
-        #region IProjectLoader Members
+        #region IProjectService Members
 
         public bool CanLoadFrom(string path)
         {
-            foreach (IProjectLoader loader in _loaders)
+            ExtensionNode node = GetNodeForPath(path);
+            if (node != null)
+            {
+                var loader = node.ExtensionObject as IProjectLoader;
                 if (loader.CanLoadFrom(path))
                     return true;
+            }
 
             return false;
         }
-
-        public IProject LoadFrom(string path)
-        {
-            foreach (IProjectLoader loader in _loaders)
-                if (loader.CanLoadFrom(path))
-                    return loader.LoadFrom(path);
-
-            return null;
-        }
-
-        #endregion
-        
-        #region Other Public Methods
 
         /// <summary>
         /// Expands a TestPackage based on a known project format, populating it
@@ -74,9 +61,12 @@ namespace NUnit.Engine.Services
         public void ExpandProjectPackage(TestPackage package)
         {
             Guard.ArgumentNotNull(package, "package");
-            Guard.ArgumentValid(package.TestFiles.Count == 0, "Package is already expanded", "package");
+            Guard.ArgumentValid(package.SubPackages.Count == 0, "Package is already expanded", "package");
 
             string path = package.FullName;
+            if (!File.Exists(path))
+                return;
+
             IProject project = LoadFrom(path);
             Guard.ArgumentValid(project != null, "Unable to load project " + path, "package");
 
@@ -89,35 +79,90 @@ namespace NUnit.Engine.Services
                 if (!package.Settings.ContainsKey(key)) // Don't override settings from command line
                     package.Settings[key] = tempPackage.Settings[key];
 
-            foreach (string assembly in tempPackage.TestFiles)
-                package.Add(assembly);
+            foreach (var subPackage in tempPackage.SubPackages)
+                package.AddSubPackage(subPackage);
+
+            // If no config is specified (by user or by the proejct loader) check
+            // to see if one exists in same directory as the package. If so, we
+            // use it. If not, each assembly will use it's own config, if present.
+            if (!package.Settings.ContainsKey(PackageSettings.ConfigurationFile))
+            {
+                var packageConfig = Path.ChangeExtension(path, ".config");
+                if (File.Exists(packageConfig))
+                    package.Settings[PackageSettings.ConfigurationFile] = packageConfig;
+            }
         }
 
         #endregion
 
-        #region IService Members
+        #region Service Overrides
 
-        private ServiceContext services;
-        public ServiceContext ServiceContext
+        public override void StartService()
         {
-            get { return services; }
-            set { services = value; }
-        }
-
-        public void InitializeService()
-        {
-            if (!_isInitialized)
+            if (Status == ServiceStatus.Stopped)
             {
-                _isInitialized = true;
+                try
+                {
+                    var extensionService = ServiceContext.GetService<ExtensionService>();
 
-                foreach (IProjectLoader loader in AddinManager.GetExtensionObjects<IProjectLoader>())
-                    _loaders.Add(loader);
+                    if (extensionService != null && extensionService.Status == ServiceStatus.Started)
+                    {
+                        foreach (var node in extensionService.GetExtensionNodes<IProjectLoader>())
+                        {
+                            foreach (string ext in node.GetProperties("FileExtension"))
+                            {
+                                if (ext != null)
+                                {
+                                    if (_extensionIndex.ContainsKey(ext))
+                                        throw new NUnitEngineException(string.Format("ProjectLoader extension {0} is already handled by another extension.", ext));
+
+                                    _extensionIndex.Add(ext, node);
+                                }
+                            }
+                        }
+
+                        Status = ServiceStatus.Started;
+                    }
+                    else
+                        Status = ServiceStatus.Error;
+                }
+                catch
+                {
+                    // TODO: Should we just ignore any addin that doesn't load?
+                    Status = ServiceStatus.Error;
+                    throw;
+                }
             }
         }
 
-        public void UnloadService()
+        #endregion
+
+        #region Helper Methods
+
+        private IProject LoadFrom(string path)
         {
-            // TODO:  Add ProjectLoader.UnloadService implementation
+            if (File.Exists(path))
+            {
+                ExtensionNode node = GetNodeForPath(path);
+                if (node != null)
+                {
+                    var loader = node.ExtensionObject as IProjectLoader;
+                    if (loader.CanLoadFrom(path))
+                        return loader.LoadFrom(path);
+                }
+            }
+
+            return null;
+        }
+
+        private ExtensionNode GetNodeForPath(string path)
+        {
+            var ext = Path.GetExtension(path);
+
+            if (string.IsNullOrEmpty(ext) || !_extensionIndex.ContainsKey(ext))
+                return null;
+
+            return _extensionIndex[ext];
         }
 
         #endregion

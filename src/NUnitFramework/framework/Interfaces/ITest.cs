@@ -1,5 +1,5 @@
 // ***********************************************************************
-// Copyright (c) 2007 Charlie Poole
+// Copyright (c) 2007-2015 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -22,7 +22,6 @@
 // ***********************************************************************
 
 using System;
-using System.Reflection;
 
 namespace NUnit.Framework.Interfaces
 {
@@ -37,7 +36,7 @@ namespace NUnit.Framework.Interfaces
         /// <summary>
         /// Gets the id of the test
         /// </summary>
-        int Id { get; }
+        string Id { get; }
 
         /// <summary>
         /// Gets the name of the test
@@ -50,16 +49,28 @@ namespace NUnit.Framework.Interfaces
         string FullName { get; }
 
         /// <summary>
+        /// Gets the name of the class containing this test. Returns
+        /// null if the test is not associated with a class.
+        /// </summary>
+        string ClassName { get; }
+
+        /// <summary>
+        /// Gets the name of the method implementing this test.
+        /// Returns null if the test is not implemented as a method.
+        /// </summary>
+        string MethodName { get; }
+
+        /// <summary>
         /// Gets the Type of the test fixture, if applicable, or
         /// null if no fixture type is associated with this test.
         /// </summary>
-        Type FixtureType { get; }
+        ITypeInfo TypeInfo { get; }
 
         /// <summary>
-        /// Gets a MethodInfo for the method implementing this test.
+        /// Gets an IMethod for the method implementing this test.
         /// Returns null if the test is not implemented as a method.
         /// </summary>
-        MethodInfo Method { get; }
+        IMethodInfo Method { get; }
 
         /// <summary>
         /// Gets the RunState of the test, indicating whether it can be run.
@@ -98,6 +109,11 @@ namespace NUnit.Framework.Interfaces
         /// </summary>
         /// <value>A list of child tests</value>
         System.Collections.Generic.IList<ITest> Tests { get; }
+
+        /// <summary>
+        /// Gets a fixture object for running this test.
+        /// </summary>
+        object Fixture { get; }
     }
 }
 

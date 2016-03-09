@@ -23,6 +23,7 @@
 
 using System;
 using System.Reflection;
+using NUnit.Framework.Compatibility;
 
 namespace NUnit.Framework.Constraints
 {
@@ -36,7 +37,7 @@ namespace NUnit.Framework.Constraints
         private object propValue;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="T:PropertyConstraint"/> class.
+        /// Initializes a new instance of the <see cref="PropertyConstraint"/> class.
         /// </summary>
         /// <param name="name">The name.</param>
         /// <param name="baseConstraint">The constraint to apply to the property.</param>
@@ -62,11 +63,7 @@ namespace NUnit.Framework.Constraints
                 actualType = actual.GetType();
 
             PropertyInfo property = actualType.GetProperty(name,
-#if PORTABLE
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-#else
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty);
-#endif
 
             // TODO: Use an error result here
             if (property == null)

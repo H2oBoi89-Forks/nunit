@@ -23,6 +23,7 @@
 
 using System;
 using System.Collections.Generic;
+using NUnit.Common;
 using NUnit.Engine.Extensibility;
 using NUnit.Engine.Internal;
 
@@ -35,8 +36,18 @@ namespace NUnit.Engine.Runners
     public abstract class DirectTestRunner : AbstractTestRunner
     {
         private readonly List<IFrameworkDriver> _drivers = new List<IFrameworkDriver>();
+        private ProvidedPathsAssemblyResolver _assemblyResolver;
 
-        public DirectTestRunner(ServiceContext services, TestPackage package) : base(services, package) { }
+        public DirectTestRunner(IServiceLocator services, TestPackage package) : base(services, package)
+        {
+            // Bypass the resolver if not in the default AppDomain. This prevents trying to use the resolver within
+            // NUnit's own automated tests (in a test AppDomain) which does not make sense anyway.
+            if (AppDomain.CurrentDomain.IsDefaultAppDomain())
+            {
+                _assemblyResolver = new ProvidedPathsAssemblyResolver();
+                _assemblyResolver.Install();
+            }
+        }
 
         #region Properties
 
@@ -59,11 +70,12 @@ namespace NUnit.Engine.Runners
             var result = new TestEngineResult();
 
             foreach (IFrameworkDriver driver in _drivers)
-                result.Add(driver.Explore(filter));
+                result.Add(driver.Explore(filter.Text));
 
-            return IsProjectPackage(TestPackage)
-                ? result.MakePackageResult(TestPackage.Name, TestPackage.FullName)
-                : result;
+            if (IsProjectPackage(TestPackage))
+                result = result.MakePackageResult(TestPackage.Name, TestPackage.FullName);
+
+            return result;
         }
 
         /// <summary>
@@ -74,16 +86,34 @@ namespace NUnit.Engine.Runners
         {
             var result = new TestEngineResult();
 
-            foreach (string testFile in TestPackage.TestFiles)
+            // DirectRunner may be called with a single-assembly package
+            // or a set of assemblies as subpackages.
+            var packages = TestPackage.SubPackages;
+            if (packages.Count == 0)
+                packages.Add(TestPackage);
+
+            var driverService = Services.GetService<IDriverService>();
+
+            foreach (var subPackage in packages)
             {
-                IFrameworkDriver driver = Services.DriverFactory.GetDriver(TestDomain, testFile, TestPackage.Settings);
-                result.Add(driver.Load());
+                var testFile = subPackage.FullName;
+
+                if (_assemblyResolver != null && !TestDomain.IsDefaultAppDomain()
+                    && subPackage.GetSetting(PackageSettings.ImageRequiresDefaultAppDomainAssemblyResolver, false))
+                {
+                    _assemblyResolver.AddPathFromFile(testFile);
+                }
+
+                IFrameworkDriver driver = driverService.GetDriver(TestDomain, testFile);
+                driver.ID = TestPackage.ID;
+                result.Add(driver.Load(testFile, subPackage.Settings));
                 _drivers.Add(driver);
             }
 
-            return IsProjectPackage(TestPackage)
-                ? result.MakePackageResult(TestPackage.Name, TestPackage.FullName)
-                : result;
+            if (IsProjectPackage(TestPackage))
+                result = result.MakePackageResult(TestPackage.Name, TestPackage.FullName);
+
+            return result;
         }
 
         /// <summary>
@@ -97,7 +127,7 @@ namespace NUnit.Engine.Runners
             int count = 0;
 
             foreach (IFrameworkDriver driver in _drivers)
-                count += driver.CountTestCases(filter);
+                count += driver.CountTestCases(filter.Text);
 
             return count;
         }
@@ -116,11 +146,22 @@ namespace NUnit.Engine.Runners
             var result = new TestEngineResult();
 
             foreach (IFrameworkDriver driver in _drivers)
-                result.Add(driver.Run(listener, filter));
+            {
+                result.Add(driver.Run(listener, filter.Text));
+            }
 
-            return IsProjectPackage(TestPackage)
-                ? result.MakePackageResult(TestPackage.Name, TestPackage.FullName)
-                : result;
+            if (IsProjectPackage(TestPackage))
+                result = result.MakePackageResult(TestPackage.Name, TestPackage.FullName);
+
+            var packages = TestPackage.SubPackages;
+            if (packages.Count == 0)
+                packages.Add(TestPackage);
+            foreach (var package in packages)
+            {
+                _assemblyResolver.RemovePathFromFile(package.FullName);
+            }
+
+            return result;
         }
 
         /// <summary>

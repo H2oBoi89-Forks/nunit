@@ -37,8 +37,17 @@ namespace NUnit.Engine.Services.Tests
         [SetUp]
         public void CreateService()
         {
+            var services = new ServiceContext();
+            services.Add(new ExtensionService());
             _resultService = new ResultService();
-            _resultService.InitializeService();
+            services.Add(_resultService);
+            services.ServiceManager.StartServices();
+        }
+
+        [Test]
+        public void ServiceIsStarted()
+        {
+            Assert.That(_resultService.Status, Is.EqualTo(ServiceStatus.Started));
         }
 
         [Test]
@@ -60,7 +69,7 @@ namespace NUnit.Engine.Services.Tests
         }
 
         [Test]
-        public void NUnit3Format_NonExistentTranform_ThrowsArgumentException()
+        public void NUnit3Format_NonExistentTransform_ThrowsArgumentException()
         {
             Assert.That(
                 () => _resultService.GetResultWriter("user", new object[] { "junk.xslt" }), 

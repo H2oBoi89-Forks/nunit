@@ -57,7 +57,9 @@ namespace NUnit.Engine.Services
         static Logger log = InternalTrace.GetLogger(typeof(TestAgency));
 
         #region Private Fields
-        private AgentDataBase agentData = new AgentDataBase();
+
+        private AgentDataBase _agentData = new AgentDataBase();
+
         #endregion
 
         #region Constructors
@@ -95,7 +97,7 @@ namespace NUnit.Engine.Services
         #region Public Methods - Called by Agents
         public void Register( ITestAgent agent )
         {
-            AgentRecord r = agentData[agent.Id];
+            AgentRecord r = _agentData[agent.Id];
             if ( r == null )
                 throw new ArgumentException(
                     string.Format("Agent {0} is not in the agency database", agent.Id),
@@ -105,7 +107,7 @@ namespace NUnit.Engine.Services
 
         public void ReportStatus( Guid agentId, AgentStatus status )
         {
-            AgentRecord r = agentData[agentId];
+            AgentRecord r = _agentData[agentId];
 
             if ( r == null )
                 throw new ArgumentException(
@@ -118,22 +120,6 @@ namespace NUnit.Engine.Services
 
         #region Public Methods - Called by Clients
 
-        /// <summary>
-        /// Returns true if NUnit support for the runtime specified 
-        /// is installed, independent of whether the runtime itself
-        /// is installed on the system.
-        /// 
-        /// In the current implementation, only .NET 1.x requires
-        /// special handling, since all higher runtimes are 
-        /// supported normally.
-        /// </summary>
-        /// <param name="version">The desired runtime version</param>
-        /// <returns>True if NUnit support is installed</returns>
-        public bool IsRuntimeVersionSupported(Version version)
-        {
-            return GetNUnitBinDirectory(version) != null;
-        }
-
         public ITestAgent GetAgent(TestPackage package, int waitTime)
         {
             // TODO: Decide if we should reuse agents
@@ -145,7 +131,7 @@ namespace NUnit.Engine.Services
 
         public void ReleaseAgent( ITestAgent agent )
         {
-            AgentRecord r = agentData[agent.Id];
+            AgentRecord r = _agentData[agent.Id];
             if (r == null)
                 log.Error(string.Format("Unable to release agent {0} - not in database", agent.Id));
             else
@@ -170,18 +156,26 @@ namespace NUnit.Engine.Services
         #region Helper Methods
         private Guid LaunchAgentProcess(TestPackage package)
         {
+            RuntimeFramework targetRuntime = RuntimeFramework.CurrentFramework;
             string runtimeSetting = package.GetSetting(PackageSettings.RuntimeFramework, "");
-            RuntimeFramework targetRuntime = RuntimeFramework.Parse(
-                runtimeSetting != ""
-                    ? runtimeSetting
-                    : ServiceContext.RuntimeFrameworkService.SelectRuntimeFramework(package));
+            if (runtimeSetting != "")
+                targetRuntime = RuntimeFramework.Parse(runtimeSetting);
+
+            if (targetRuntime.Runtime == RuntimeType.Any)
+                targetRuntime = new RuntimeFramework(RuntimeFramework.CurrentFramework.Runtime, targetRuntime.ClrVersion);
 
             bool useX86Agent = package.GetSetting(PackageSettings.RunAsX86, false);
-            bool enableDebug = package.GetSetting("AgentDebug", false);
-            bool verbose = package.GetSetting("Verbose", false);
+            bool debugTests = package.GetSetting(PackageSettings.DebugTests, false);
+            bool debugAgent = package.GetSetting(PackageSettings.DebugAgent, false);
+            string traceLevel = package.GetSetting(PackageSettings.InternalTraceLevel, "Off");
+
+            // Set options that need to be in effect before the package
+            // is loaded by using the command line.
             string agentArgs = string.Empty;
-            if (enableDebug) agentArgs += " --pause";
-            if (verbose) agentArgs += " --verbose";
+            if (debugAgent)
+                agentArgs += " --debug-agent";
+            if (traceLevel != "Off")
+                agentArgs += " --trace:" + traceLevel;
 
             log.Info("Getting {0} agent for use under {1}", useX86Agent ? "x86" : "standard", targetRuntime);
 
@@ -204,25 +198,25 @@ namespace NUnit.Engine.Services
             Guid agentId = Guid.NewGuid();
             string arglist = agentId.ToString() + " " + ServerUrl + " " + agentArgs;
 
+            if (targetRuntime.ClrVersion.Build < 0)
+                targetRuntime = RuntimeFramework.GetBestAvailableFramework(targetRuntime);
+
             switch( targetRuntime.Runtime )
             {
                 case RuntimeType.Mono:
                     p.StartInfo.FileName = NUnitConfiguration.MonoExePath;
                     string monoOptions = "--runtime=v" + targetRuntime.ClrVersion.ToString(3);
-                    if (enableDebug) monoOptions += " --debug";
+                    if (debugTests || debugAgent) monoOptions += " --debug";
                     p.StartInfo.Arguments = string.Format("{0} \"{1}\" {2}", monoOptions, agentExePath, arglist);
                     break;
+
                 case RuntimeType.Net:
                     p.StartInfo.FileName = agentExePath;
-
-                    if (targetRuntime.ClrVersion.Build < 0)
-                        targetRuntime = RuntimeFramework.GetBestAvailableFramework(targetRuntime);
-
                     string envVar = "v" + targetRuntime.ClrVersion.ToString(3);
                     p.StartInfo.EnvironmentVariables["COMPLUS_Version"] = envVar;
-
                     p.StartInfo.Arguments = arglist;
                     break;
+
                 default:
                     p.StartInfo.FileName = agentExePath;
                     p.StartInfo.Arguments = arglist;
@@ -234,7 +228,7 @@ namespace NUnit.Engine.Services
             log.Info("Launched Agent process {0} - see nunit-agent_{0}.log", p.Id);
             log.Info("Command line: \"{0}\" {1}", p.StartInfo.FileName, p.StartInfo.Arguments);
 
-            agentData.Add( new AgentRecord( agentId, p, null, AgentStatus.Starting ) );
+            _agentData.Add( new AgentRecord( agentId, p, null, AgentStatus.Starting ) );
             return agentId;
         }
 
@@ -271,7 +265,7 @@ namespace NUnit.Engine.Services
             {
                 Thread.Sleep( pollTime );
                 if ( !infinite ) waitTime -= pollTime;
-                ITestAgent agent = agentData[agentId].Agent;
+                ITestAgent agent = _agentData[agentId].Agent;
                 if ( agent != null )
                 {
                     log.Debug( "Returning new agent {0}", agentId.ToString("B") );
@@ -286,14 +280,14 @@ namespace NUnit.Engine.Services
         /// Return the NUnit Bin Directory for a particular
         /// runtime version, or null if it's not installed.
         /// For normal installations, there are only 1.1 and
-        /// 2.0 directories. However, this method accomodates
+        /// 2.0 directories. However, this method accommodates
         /// 3.5 and 4.0 directories for the benefit of NUnit
         /// developers using those runtimes.
         /// </summary>
         private static string GetNUnitBinDirectory(Version v)
         {
             // Get current bin directory
-            string dir = NUnitConfiguration.NUnitBinDirectory;
+            string dir = NUnitConfiguration.EngineDirectory;
 
             // Return current directory if current and requested
             // versions are both >= 2 or both 1
@@ -341,14 +335,14 @@ namespace NUnit.Engine.Services
 
         private static string GetTestAgentExePath(Version v, bool requires32Bit)
         {
-            string binDir = GetNUnitBinDirectory(v);
-            if (binDir == null) return null;
+            string engineDir = NUnitConfiguration.EngineDirectory;
+            if (engineDir == null) return null;
 
             string agentName = v.Major > 1 && requires32Bit
                 ? "nunit-agent-x86.exe"
                 : "nunit-agent.exe";
 
-            string agentExePath = Path.Combine(binDir, agentName);
+            string agentExePath = Path.Combine(engineDir, agentName);
             return File.Exists(agentExePath) ? agentExePath : null;
         }
 
@@ -356,21 +350,34 @@ namespace NUnit.Engine.Services
 
         #region IService Members
 
-        private ServiceContext services;
-        public ServiceContext ServiceContext 
+        public IServiceLocator ServiceContext { get; set; }
+
+        public ServiceStatus Status { get; private set; }
+
+        public void StopService()
         {
-            get { return services; }
-            set { services = value; }
+            try
+            {
+                Stop();
+            }
+            finally
+            {
+                Status = ServiceStatus.Stopped;
+            }
         }
 
-        public void UnloadService()
+        public void StartService()
         {
-            this.Stop();
-        }
-
-        public void InitializeService()
-        {
-            this.Start();
+            try
+            {
+                Start();
+                Status = ServiceStatus.Started;
+            }
+            catch
+            {
+                Status = ServiceStatus.Error;
+                throw;
+            }
         }
 
         #endregion

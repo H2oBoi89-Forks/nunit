@@ -40,14 +40,11 @@ namespace NUnit.Engine
         XmlNode Result { get; }
 
         /// <summary>
-        /// Stop the current test run, specifying whether to force cancellation. 
-        /// If no test is running, the method returns without error.
+        /// Blocks the current thread until the current test run completes
+        /// or the timeout is reached
         /// </summary>
-        /// <param name="force">If true, force the stop by cancelling all threads.</param>
-        /// <remarks>
-        /// Note that cancelling the threads is intrinsically unsafe and is only
-        /// provided on the assumption that tests do not impact production data.
-        /// </remarks>
-        void Stop(bool force);
+        /// <param name="timeout">A <see cref="T:System.Int32"/> that represents the number of milliseconds to wait or -1 milliseconds to wait indefinitely. </param>
+        /// <returns>True if the run completed</returns>
+        bool Wait(int timeout);
     }
 }

@@ -1,4 +1,4 @@
-﻿// ***********************************************************************
+// ***********************************************************************
 // Copyright (c) 2014 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -8,10 +8,10 @@
 // distribute, sublicense, and/or sell copies of the Software, and to
 // permit persons to whom the Software is furnished to do so, subject to
 // the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be
 // included in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 // EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -30,7 +30,7 @@ namespace NUnit.Framework.Internal.Execution
     /// <summary>
     /// SimpleWorkItemDispatcher handles execution of WorkItems by
     /// directly executing them. It is provided so that a dispatcher
-    /// is always available in the context, thereby simplifying the 
+    /// is always available in the context, thereby simplifying the
     /// code needed to run child tests.
     /// </summary>
     public class SimpleWorkItemDispatcher : IWorkItemDispatcher
@@ -65,11 +65,17 @@ namespace NUnit.Framework.Internal.Execution
             {
                 _topLevelWorkItem = work;
                 _runnerThread = new Thread(RunnerThreadProc);
+
+#if !NETCF && !SILVERLIGHT
+                if (work.TargetApartment == ApartmentState.STA)
+                    _runnerThread.SetApartmentState(ApartmentState.STA);
+#endif
+
                 _runnerThread.Start();
             }
 #endif
         }
-        
+
 #if !PORTABLE
         private void RunnerThreadProc()
         {
@@ -77,21 +83,27 @@ namespace NUnit.Framework.Internal.Execution
         }
 #endif
 
+#if !PORTABLE
+        private object cancelLock = new object();
+#endif
+
         /// <summary>
-        /// Cancel the ongoing run completely.
+        /// Cancel (abort or stop) the ongoing run.
         /// If no run is in process, the call has no effect.
         /// </summary>
-        public void CancelRun()
+        /// <param name="force">true if the run should be aborted, false if it should allow its currently running test to complete</param>
+        public void CancelRun(bool force)
         {
 #if !PORTABLE
-#if NETCF
-            // NETCF: Check if this can be done better
-            if (_runnerThread != null)
-                _runnerThread.Abort();
-#else
-            if (_runnerThread != null && _runnerThread.IsAlive)
-                ThreadUtility.Kill(_runnerThread);
-#endif
+            lock (cancelLock)
+            {
+                if (_topLevelWorkItem != null)
+                {
+                    _topLevelWorkItem.Cancel(force);
+                    if (force)
+                        _topLevelWorkItem = null;
+                }
+            }
 #endif
         }
         #endregion

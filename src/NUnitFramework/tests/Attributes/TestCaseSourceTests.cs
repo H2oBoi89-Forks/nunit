@@ -1,5 +1,5 @@
 // ***********************************************************************
-// Copyright (c) 2009 Charlie Poole
+// Copyright (c) 2009-2015 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -32,7 +32,7 @@ using NUnit.TestUtilities;
 namespace NUnit.Framework.Attributes
 {
     [TestFixture]
-    public class TestCaseSourceTests
+    public class TestCaseSourceTests //: TestSourceMayBeInherited
     {
         [Test, TestCaseSource("StaticProperty")]
         public void SourceCanBeStaticProperty(string source)
@@ -40,20 +40,22 @@ namespace NUnit.Framework.Attributes
             Assert.AreEqual("StaticProperty", source);
         }
 
+        //[Test, TestCaseSource("InheritedStaticProperty")]
+        //public void TestSourceCanBeInheritedStaticProperty(bool source)
+        //{
+        //    Assert.AreEqual(true, source);
+        //}
+
         static IEnumerable StaticProperty
         {
             get { return new object[] { new object[] { "StaticProperty" } }; }
         }
 
-        [Test, TestCaseSource("InstanceProperty")]
-        public void SourceCanBeInstanceProperty(string source)
+        [Test]
+        public void SourceUsingInstancePropertyIsNotRunnable()
         {
-            Assert.AreEqual("InstanceProperty", source);
-        }
-
-        IEnumerable InstanceProperty
-        {
-            get { return new object[] { new object[] { "InstanceProperty" } }; }
+            var result = TestBuilder.RunParameterizedMethodSuite(typeof(TestCaseSourceAttributeFixture), "MethodWithInstancePropertyAsSource");
+            Assert.AreEqual(result.Children[0].ResultState, ResultState.NotRunnable);
         }
 
         [Test, TestCaseSource("StaticMethod")]
@@ -67,10 +69,11 @@ namespace NUnit.Framework.Attributes
             return new object[] { new object[] { "StaticMethod" } };
         }
 
-        [Test, TestCaseSource("InstanceMethod")]
-        public void SourceCanBeInstanceMethod(string source)
+        [Test]
+        public void SourceUsingInstanceMethodIsNotRunnable()
         {
-            Assert.AreEqual("InstanceMethod", source);
+            var result = TestBuilder.RunParameterizedMethodSuite(typeof(TestCaseSourceAttributeFixture), "MethodWithInstanceMethodAsSource");
+            Assert.AreEqual(result.Children[0].ResultState, ResultState.NotRunnable);
         }
 
         IEnumerable InstanceMethod()
@@ -87,25 +90,17 @@ namespace NUnit.Framework.Attributes
         static object[] StaticField =
             { new object[] { "StaticField" } };
 
-        [Test, TestCaseSource("InstanceField")]
-        public void SourceCanBeInstanceField(string source)
+        [Test]
+        public void SourceUsingInstanceFieldIsNotRunnable()
         {
-            Assert.AreEqual("InstanceField", source);
+            var result = TestBuilder.RunParameterizedMethodSuite(typeof(TestCaseSourceAttributeFixture), "MethodWithInstanceFieldAsSource");
+            Assert.AreEqual(result.Children[0].ResultState, ResultState.NotRunnable);
         }
-
-        static object[] InstanceField =
-            { new object[] { "InstanceField" } };
 
         [Test, TestCaseSource(typeof(DataSourceClass))]
         public void SourceCanBeInstanceOfIEnumerable(string source)
         {
             Assert.AreEqual("DataSourceClass", source);
-        }
-
-        [Test, TestCaseSource(typeof(DataSourceClass), null, "foo")]
-        public void SourceCanBeInstanceOfIEnumerableWithParameters(string source)
-        {
-            Assert.AreEqual("foo", source);
         }
 
         class DataSourceClass : IEnumerable
@@ -114,45 +109,9 @@ namespace NUnit.Framework.Attributes
             {
             }
 
-            private readonly string enumeratorOverride;
-
-            public DataSourceClass(string enumeratorOverride)
-            {
-                this.enumeratorOverride = enumeratorOverride;
-            }
-
             public IEnumerator GetEnumerator()
             {
-                yield return this.enumeratorOverride ?? "DataSourceClass";
-            }
-        }
-
-        [Test, TestCaseSource(typeof(DataSourceClassWithMethod), "GetStuff", "foo")]
-        public void SourceCanHaveMethodProducingIEnumerableWithParameters(string source)
-        {
-            string[] items = new[] { "foo1", "foo2", "foo3" };
-            bool found = false;
-            for (int i = 0; i < items.Length; i++)
-            {
-                if (items[i] == source)
-                {
-                    found = true;
-                }
-            }
-            Assert.IsTrue(found);
-        }
-
-        class DataSourceClassWithMethod
-        {
-            private readonly string enumeratorPrepend;
-
-            public DataSourceClassWithMethod(string enumeratorPrepend)
-            {
-                this.enumeratorPrepend = enumeratorPrepend;
-            }
-            public IEnumerable<string> GetStuff()
-            {
-                return new[] { enumeratorPrepend + "1", enumeratorPrepend + "2", enumeratorPrepend + "3" };
+                yield return "DataSourceClass";
             }
         }
 
@@ -188,7 +147,7 @@ namespace NUnit.Framework.Attributes
 
         [Test]
         [TestCaseSource("MyData")]
-        [TestCaseSource("MoreData", Category="Extra")]
+        [TestCaseSource("MoreData", Category = "Extra")]
         [TestCase(12, 2, 6)]
         public void TestMayUseMultipleSourceAttributes(int n, int d, int q)
         {
@@ -206,6 +165,51 @@ namespace NUnit.Framework.Attributes
         public void SourceMayBeInAnotherClass(int n, int d, int q)
         {
             Assert.AreEqual(q, n / d);
+        }
+        
+        [Test, Category("Top"), TestCaseSource(typeof(DivideDataProvider), "HereIsTheDataWithParameters", new object[] { 100, 4, 25 })]
+        public void SourceInAnotherClassPassingSomeDataToConstructor(int n, int d, int q)
+        {
+            Assert.AreEqual(q, n / d);
+        }
+
+        [Test]
+        public void SourceInAnotherClassPassingParamsToField()
+        {
+            var testMethod = (TestMethod)TestBuilder.MakeParameterizedMethodSuite(
+                typeof(TestCaseSourceAttributeFixture), "SourceInAnotherClassPassingParamsToField").Tests[0];
+            Assert.AreEqual(RunState.NotRunnable, testMethod.RunState);
+            ITestResult result = TestBuilder.RunTest(testMethod, null);
+            Assert.AreEqual(ResultState.NotRunnable, result.ResultState);
+            Assert.AreEqual("You have specified a data source field but also given a set of parameters. Fields cannot take parameters, " +
+                            "please revise the 3rd parameter passed to the TestCaseSourceAttribute and either remove " +
+                            "it or specify a method.", result.Message);
+        }
+
+        [Test]
+        public void SourceInAnotherClassPassingParamsToProperty()
+        {
+            var testMethod = (TestMethod)TestBuilder.MakeParameterizedMethodSuite(
+                typeof(TestCaseSourceAttributeFixture), "SourceInAnotherClassPassingParamsToProperty").Tests[0];
+            Assert.AreEqual(RunState.NotRunnable, testMethod.RunState);
+            ITestResult result = TestBuilder.RunTest(testMethod, null);
+            Assert.AreEqual(ResultState.NotRunnable, result.ResultState);
+            Assert.AreEqual("You have specified a data source property but also given a set of parameters. " +
+                            "Properties cannot take parameters, please revise the 3rd parameter passed to the " +
+                            "TestCaseSource attribute and either remove it or specify a method.", result.Message);
+        }
+
+        [Test]
+        public void SourceInAnotherClassPassingSomeDataToConstructorWrongNumberParam()
+        {
+            var testMethod = (TestMethod)TestBuilder.MakeParameterizedMethodSuite(
+                typeof(TestCaseSourceAttributeFixture), "SourceInAnotherClassPassingSomeDataToConstructorWrongNumberParam").Tests[0];
+            Assert.AreEqual(RunState.NotRunnable, testMethod.RunState);
+            ITestResult result = TestBuilder.RunTest(testMethod, null);
+            Assert.AreEqual(ResultState.NotRunnable, result.ResultState);
+            Assert.AreEqual("You have given the wrong number of arguments to the method in the TestCaseSourceAttribute" +
+                            ", please check the number of parameters passed in the object is correct in the 3rd parameter for the " +
+                            "TestCaseSourceAttribute and this matches the number of parameters in the target method and try again.", result.Message);
         }
 
         [Test, TestCaseSource(typeof(DivideDataProviderWithReturnValue), "TestCases")]
@@ -231,7 +235,7 @@ namespace NUnit.Framework.Attributes
 
             Test testCase = TestFinder.Find("MethodWithIgnoredTestCases(1)", suite, false);
             Assert.That(testCase.RunState, Is.EqualTo(RunState.Runnable));
- 
+
             testCase = TestFinder.Find("MethodWithIgnoredTestCases(2)", suite, false);
             Assert.That(testCase.RunState, Is.EqualTo(RunState.Ignored));
             Assert.That(testCase.Properties.Get(PropertyNames.SkipReason), Is.EqualTo("Don't Run Me!"));
@@ -245,10 +249,10 @@ namespace NUnit.Framework.Attributes
 
             Test testCase = TestFinder.Find("MethodWithExplicitTestCases(1)", suite, false);
             Assert.That(testCase.RunState, Is.EqualTo(RunState.Runnable));
- 
+
             testCase = TestFinder.Find("MethodWithExplicitTestCases(2)", suite, false);
             Assert.That(testCase.RunState, Is.EqualTo(RunState.Explicit));
- 
+
             testCase = TestFinder.Find("MethodWithExplicitTestCases(3)", suite, false);
             Assert.That(testCase.RunState, Is.EqualTo(RunState.Explicit));
             Assert.That(testCase.Properties.Get(PropertyNames.SkipReason), Is.EqualTo("Connection failing"));
@@ -265,13 +269,13 @@ namespace NUnit.Framework.Attributes
             Assert.AreEqual("System.Exception : my message", result.Message);
         }
 
-        [TestCaseSource("exception_source"), Explicit]
-        public void HandlesExceptioninTestCaseSource_GuiDisplay(string lhs, string rhs)
+        [TestCaseSource("exception_source"), Explicit("Used for GUI tests")]
+        public void HandlesExceptionInTestCaseSource_GuiDisplay(string lhs, string rhs)
         {
             Assert.AreEqual(lhs, rhs);
         }
 
-        object[] testCases =
+        static object[] testCases =
         {
             new TestCaseData(
                 new string[] { "A" },
@@ -313,16 +317,18 @@ namespace NUnit.Framework.Attributes
 
         private class DivideDataProvider
         {
+#pragma warning disable 0169    // x is never assigned
+            private static object[] myObject;
+#pragma warning restore 0169
+
+            public static IEnumerable HereIsTheDataWithParameters(int inject1, int inject2, int inject3)
+            {
+                yield return new object[] { inject1, inject2, inject3 };
+            }
             public static IEnumerable HereIsTheData
             {
                 get
                 {
-                    //yield return new TestCaseData(0, 0, 0)
-                    //    .SetName("ThisOneShouldThrow")
-                    //    .SetDescription("Demonstrates use of ExpectedException")
-                    //    .SetCategory("Junk")
-                    //    .SetProperty("MyProp", "zip")
-                    //    .Throws(typeof(System.DivideByZeroException));
                     yield return new object[] { 100, 20, 5 };
                     yield return new object[] { 100, 4, 25 };
                 }
@@ -355,5 +361,13 @@ namespace NUnit.Framework.Attributes
             }
         }
         #endregion
+    }
+
+    public class TestSourceMayBeInherited
+    {
+        protected static IEnumerable<bool> InheritedStaticProperty
+        {
+            get { yield return true; }
+        }
     }
 }

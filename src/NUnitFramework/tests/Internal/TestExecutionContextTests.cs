@@ -27,11 +27,13 @@ using System.Threading;
 using System.Globalization;
 using NUnit.Common;
 using NUnit.Framework;
+using NUnit.Framework.Constraints;
+using NUnit.TestData.TestContextData;
+using NUnit.TestUtilities;
+
 #if !NETCF
 using System.Security.Principal;
 #endif
-using NUnit.TestData.TestContextData;
-using NUnit.TestUtilities;
 
 namespace NUnit.Framework.Internal
 {
@@ -44,7 +46,7 @@ namespace NUnit.Framework.Internal
         TestExecutionContext fixtureContext;
         TestExecutionContext setupContext;
 
-#if !NETCF && !SILVERLIGHT
+#if !NETCF && !SILVERLIGHT && !PORTABLE
         string originalDirectory;
         IPrincipal originalPrincipal;
 #endif
@@ -65,7 +67,7 @@ namespace NUnit.Framework.Internal
             Assert.That(ec.CurrentTest.Name, Is.EqualTo("TestExecutionContextTests"));
             Assert.That(ec.CurrentTest.FullName,
                 Is.EqualTo("NUnit.Framework.Internal.TestExecutionContextTests"));
-            Assert.That(fixtureContext.CurrentTest.Id, Is.GreaterThan(0));
+            Assert.That(fixtureContext.CurrentTest.Id, Is.Not.Null.And.Not.Empty);
             Assert.That(fixtureContext.CurrentTest.Properties.Get("Question"), Is.EqualTo("Why?"));
         }
 
@@ -77,12 +79,12 @@ namespace NUnit.Framework.Internal
         public void Initialize()
         {
             setupContext = new TestExecutionContext(TestExecutionContext.CurrentContext);
-#if !NETCF
+#if !NETCF && !PORTABLE
             originalCulture = CultureInfo.CurrentCulture;
             originalUICulture = CultureInfo.CurrentUICulture;
 #endif
 
-#if !NETCF && !SILVERLIGHT
+#if !NETCF && !SILVERLIGHT && !PORTABLE
             originalDirectory = Environment.CurrentDirectory;
             originalPrincipal = Thread.CurrentPrincipal;
 #endif
@@ -91,12 +93,12 @@ namespace NUnit.Framework.Internal
         [TearDown]
         public void Cleanup()
         {
-#if !NETCF
+#if !NETCF && !PORTABLE
             Thread.CurrentThread.CurrentCulture = originalCulture;
             Thread.CurrentThread.CurrentUICulture = originalUICulture;
 #endif
 
-#if !NETCF && !SILVERLIGHT
+#if !NETCF && !SILVERLIGHT && !PORTABLE
             Environment.CurrentDirectory = originalDirectory;
             Thread.CurrentPrincipal = originalPrincipal;
 #endif
@@ -125,7 +127,7 @@ namespace NUnit.Framework.Internal
         [Test]
         public void FixtureSetUpCanAccessFixtureId()
         {
-            Assert.That(fixtureContext.CurrentTest.Id, Is.GreaterThan(0));
+            Assert.That(fixtureContext.CurrentTest.Id, Is.Not.Null.And.Not.Empty);
         }
 
         [Test]
@@ -150,7 +152,7 @@ namespace NUnit.Framework.Internal
         [Test]
         public void SetUpCanAccessTestId()
         {
-            Assert.That(setupContext.CurrentTest.Id, Is.GreaterThan(0));
+            Assert.That(setupContext.CurrentTest.Id, Is.Not.Null.And.Not.Empty);
         }
 
         [Test]
@@ -176,7 +178,7 @@ namespace NUnit.Framework.Internal
         [Test]
         public void TestCanAccessItsOwnId()
         {
-            Assert.That(TestExecutionContext.CurrentContext.CurrentTest.Id, Is.GreaterThan(0));
+            Assert.That(TestExecutionContext.CurrentContext.CurrentTest.Id, Is.Not.Null.And.Not.Empty);
         }
 
         [Test]
@@ -190,12 +192,12 @@ namespace NUnit.Framework.Internal
 
         #region CurrentCulture and CurrentUICulture
 
-#if !NETCF
+#if !NETCF && !PORTABLE
         CultureInfo originalCulture;
         CultureInfo originalUICulture;
 
         [Test]
-        public void FixtureSetUpontextReflectsCurrentCulture()
+        public void FixtureSetUpContextReflectsCurrentCulture()
         {
             Assert.That(fixtureContext.CurrentCulture, Is.EqualTo(CultureInfo.CurrentCulture));
         }
@@ -282,7 +284,7 @@ namespace NUnit.Framework.Internal
 
         #region CurrentPrincipal
 
-#if !NETCF && !SILVERLIGHT
+#if !NETCF && !SILVERLIGHT && !PORTABLE
         [Test]
         public void FixtureSetUpContextReflectsCurrentPrincipal()
         {
@@ -326,6 +328,34 @@ namespace NUnit.Framework.Internal
 
         #endregion
 
+        #region ValueFormatter
+
+        [Test]
+        public void SetAndRestoreValueFormatter()
+        {
+            var context = new TestExecutionContext(setupContext);
+            var originalFormatter = context.CurrentValueFormatter;
+
+            try
+            {
+                ValueFormatter f = val => "dummy";
+                context.AddFormatter(next => f);
+                Assert.That(context.CurrentValueFormatter, Is.EqualTo(f));
+
+                context.EstablishExecutionEnvironment();
+                Assert.That(MsgUtils.FormatValue(123), Is.EqualTo("dummy"));
+            }
+            finally
+            {
+                setupContext.EstablishExecutionEnvironment();
+            }
+
+            Assert.That(TestExecutionContext.CurrentContext.CurrentValueFormatter, Is.EqualTo(originalFormatter));
+            Assert.That(MsgUtils.FormatValue(123), Is.EqualTo("123"));
+        }
+
+        #endregion
+
         #region ExecutionStatus
 
         [Test]
@@ -366,7 +396,7 @@ namespace NUnit.Framework.Internal
 
         #region Cross-domain Tests
 
-#if !SILVERLIGHT && !NETCF
+#if !SILVERLIGHT && !NETCF && !PORTABLE
         [Test]
         public void CanCreateObjectInAppDomain()
         {

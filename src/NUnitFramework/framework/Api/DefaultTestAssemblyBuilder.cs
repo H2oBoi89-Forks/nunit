@@ -26,6 +26,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Common;
+using NUnit.Framework.Compatibility;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Builders;
@@ -79,8 +80,10 @@ namespace NUnit.Framework.Api
             log.Debug("Loading {0} in AppDomain {1}", assembly.FullName, AppDomain.CurrentDomain.FriendlyName);
 #endif
 
-#if SILVERLIGHT || PORTABLE
+#if SILVERLIGHT
             string assemblyPath = AssemblyHelper.GetAssemblyName(assembly).Name;
+#elif PORTABLE
+            string assemblyPath = AssemblyHelper.GetAssemblyName(assembly).FullName;
 #else
             string assemblyPath = AssemblyHelper.GetAssemblyPath(assembly);
 #endif
@@ -111,7 +114,7 @@ namespace NUnit.Framework.Api
                 var assembly = AssemblyHelper.Load(assemblyName);
                 testAssembly = Build(assembly, assemblyName, options);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 testAssembly = new TestAssembly(assemblyName);
                 testAssembly.RunState = RunState.NotRunnable;
@@ -128,7 +131,7 @@ namespace NUnit.Framework.Api
             try
             {
                 IList fixtureNames = options[PackageSettings.LOAD] as IList;
-                IList fixtures = GetFixtures(assembly, fixtureNames);
+                var fixtures = GetFixtures(assembly, fixtureNames);
 
                 testAssembly = BuildTestAssembly(assembly, assemblyPath, fixtures);
             }
@@ -146,12 +149,12 @@ namespace NUnit.Framework.Api
 
         #region Helper Methods
 
-        private IList GetFixtures(Assembly assembly, IList names)
+        private IList<Test> GetFixtures(Assembly assembly, IList names)
         {
             var fixtures = new List<Test>();
             log.Debug("Examining assembly for test fixtures");
 
-            IList testTypes = GetCandidateFixtureTypes(assembly, names);
+            var testTypes = GetCandidateFixtureTypes(assembly, names);
 
             log.Debug("Found {0} classes to examine", testTypes.Count);
 #if LOAD_TIMING
@@ -161,11 +164,13 @@ namespace NUnit.Framework.Api
             int testcases = 0;
             foreach (Type testType in testTypes)
             {
+                var typeInfo = new TypeWrapper(testType);
+
                 try
                 {
-                    if (_defaultSuiteBuilder.CanBuildFrom(testType))
+                    if (_defaultSuiteBuilder.CanBuildFrom(typeInfo))
                     {
-                        Test fixture = _defaultSuiteBuilder.BuildFrom(testType);
+                        Test fixture = _defaultSuiteBuilder.BuildFrom(typeInfo);
                         fixtures.Add(fixture);
                         testcases += fixture.TestCaseCount;
                     }
@@ -185,9 +190,9 @@ namespace NUnit.Framework.Api
             return fixtures;
         }
 
-        private IList GetCandidateFixtureTypes(Assembly assembly, IList names)
+        private IList<Type> GetCandidateFixtureTypes(Assembly assembly, IList names)
         {
-            IList types = assembly.GetTypes();
+            var types = assembly.GetTypes();
 
             if (names == null || names.Count == 0)
                 return types;
@@ -212,7 +217,7 @@ namespace NUnit.Framework.Api
             return result;
         }
 
-        private TestSuite BuildTestAssembly(Assembly assembly, string assemblyName, IList fixtures)
+        private TestSuite BuildTestAssembly(Assembly assembly, string assemblyName, IList<Test> fixtures)
         {
             TestSuite testAssembly = new TestAssembly(assembly, assemblyName);
 

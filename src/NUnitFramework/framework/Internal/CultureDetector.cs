@@ -22,7 +22,6 @@
 // ***********************************************************************
 
 using System;
-using System.Reflection;
 using System.Globalization;
 
 namespace NUnit.Framework.Internal
@@ -39,7 +38,7 @@ namespace NUnit.Framework.Internal
         private string reason = string.Empty;
 
         /// <summary>
-        /// Default constructor uses the current culutre.
+        /// Default constructor uses the current culture.
         /// </summary>
         public CultureDetector()
         {
@@ -47,7 +46,7 @@ namespace NUnit.Framework.Internal
         }
 
         /// <summary>
-        /// Contruct a CultureDetector for a particular culture for testing.
+        /// Construct a CultureDetector for a particular culture for testing.
         /// </summary>
         /// <param name="culture">The culture to be used</param>
         public CultureDetector( string culture )
@@ -56,7 +55,7 @@ namespace NUnit.Framework.Internal
         }
 
         /// <summary>
-        /// Test to determine if one of a collection of culturess
+        /// Test to determine if one of a collection of cultures
         /// is being used currently.
         /// </summary>
         /// <param name="cultures"></param>

@@ -23,6 +23,7 @@
 
 using System;
 using System.IO;
+using NUnit.Framework.Constraints;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 
@@ -95,12 +96,12 @@ namespace NUnit.Framework
         /// </summary>
         public string TestDirectory
         {
-            get { return AssemblyHelper.GetDirectoryName(_testExecutionContext.CurrentTest.FixtureType.Assembly); }
+            get { return AssemblyHelper.GetDirectoryName(_testExecutionContext.CurrentTest.TypeInfo.Assembly); }
         }
 #endif
 
         /// <summary>
-        /// Gets the directory to be used for outputing files created
+        /// Gets the directory to be used for outputting files created
         /// by this test run.
         /// </summary>
         public string WorkDirectory
@@ -114,7 +115,7 @@ namespace NUnit.Framework
         /// <value>
         /// The random generator.
         /// </value>
-        public RandomGenerator Random
+        public Randomizer Random
         {
             get { return _testExecutionContext.RandomGenerator; }
         }
@@ -226,6 +227,31 @@ namespace NUnit.Framework
         /// <summary>Write a formatted string to the current result followed by a line terminator</summary>
         public static void WriteLine(string format, params object[] args) { Out.WriteLine(format, args); }
 
+        /// <summary>
+        /// This method adds the a new ValueFormatterFactory to the
+        /// chain of responsibility used for fomatting values in messages.
+        /// The scope of the change is the current TestContext.
+        /// </summary>
+        /// <param name="formatterFactory">The factory delegate</param>
+        public static void AddFormatter(ValueFormatterFactory formatterFactory)
+        {
+            TestExecutionContext.CurrentContext.AddFormatter(formatterFactory);
+        }
+
+        /// <summary>
+        /// This method provides a simplified way to add a ValueFormatter
+        /// delegate to the chain of responsibility, creating the factory
+        /// delegate internally. It is useful when the Type of the object
+        /// is the only criterion for selection of the formatter, since
+        /// it can be used without getting involved with a compould function.
+        /// </summary>
+        /// <typeparam name="TSUPPORTED">The type supported by this formatter</typeparam>
+        /// <param name="formatter">The ValueFormatter delegate</param>
+        public static void AddFormatter<TSUPPORTED>(ValueFormatter formatter)
+        {
+            AddFormatter(next => val => (val is TSUPPORTED) ? formatter(val) : next(val));
+        }
+
         #endregion
 
         #region Nested TestAdapter Class
@@ -256,7 +282,7 @@ namespace NUnit.Framework
             /// <summary>
             /// Gets the unique Id of a test
             /// </summary>
-            public int ID
+            public String ID
             {
                 get { return _test.Id; }
             }
@@ -289,6 +315,14 @@ namespace NUnit.Framework
             public string FullName
             {
                 get { return _test.FullName; }
+            }
+
+            /// <summary>
+            /// The ClassName of the test
+            /// </summary>
+            public string ClassName
+            {
+                get { return _test.ClassName;  }
             }
 
             /// <summary>

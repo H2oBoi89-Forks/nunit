@@ -63,6 +63,14 @@ namespace NUnit.Framework.Attributes
             Assert.That(test.TestCaseCount, Is.EqualTo(4));
         }
 
+        [Test]
+        public void DatapointAndAttributeDataMayBeCombined()
+        {
+            Test test = TestBuilder.MakeParameterizedMethodSuite(fixtureType, "TestWithBothDatapointAndAttributeData");
+            TestAssert.IsRunnable(test);
+            Assert.That(test.TestCaseCount, Is.EqualTo(6));
+        }
+
         [Datapoint]
         object nullObj = null;
 
@@ -82,6 +90,18 @@ namespace NUnit.Framework.Attributes
             Assert.That(test.TestCaseCount, Is.EqualTo(16));
         }
 
+        [Test]
+        public void AllValuesMayBeSuppliedByAttributes()
+        {       
+            // NOTE: This test was failing with a count of 8 because both
+            // TheoryAttribute and CombinatorialAttribute were adding cases.
+            // Solution is to make TheoryAttribute a CombiningAttribute so
+            // that no extra attribute is added to the method.
+            Test test = TestBuilder.MakeParameterizedMethodSuite(fixtureType, "TestWithAllDataSuppliedByAttributes");
+            TestAssert.IsRunnable(test);
+            Assert.That(test.TestCaseCount, Is.EqualTo(4));
+        }
+
         [Theory]
         public void SquareRootWithAllGoodValues(
             [Values(12.0, 4.0, 9.0)] double d)
@@ -92,13 +112,6 @@ namespace NUnit.Framework.Attributes
         [Theory]
         public void SquareRootWithOneBadValue(
             [Values(12.0, -4.0, 9.0)] double d)
-        {
-            SquareRootTest(d);
-        }
-
-        [Theory, Explicit("Used to demonstrate display of failing Theory")]
-        public void SquareRootWithAllBadValues(
-            [Values(-12.0, -4.0, -9.0)] double d)
         {
             SquareRootTest(d);
         }

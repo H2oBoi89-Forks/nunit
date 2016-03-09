@@ -1,5 +1,5 @@
 ﻿// ***********************************************************************
-// Copyright (c) 2011 Charlie Poole
+// Copyright (c) 2011-2015 Charlie Poole
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -30,107 +30,105 @@ namespace NUnit.Engine.Services.Tests
 {
     public class DomainManagerTests
     {
-        static string path1 = TestPath("/test/bin/debug/test1.dll");
-        static string path2 = TestPath("/test/bin/debug/test2.dll");
-        static string path3 = TestPath("/test/utils/test3.dll");
+        private DomainManager _domainManager;
+        private TestPackage _package = new TestPackage(MockAssembly.AssemblyPath);
 
-        [Test]
-        public void GetPrivateBinPath()
+        [SetUp]
+        public void CreateDomainManager()
         {
-            string[] assemblies = new string[] { path1, path2, path3 };
-
-            Assert.AreEqual(
-                TestPath("bin/debug") + Path.PathSeparator + TestPath("utils"),
-                DomainManager.GetPrivateBinPath(TestPath("/test"), assemblies));
+            var context = new ServiceContext();
+            _domainManager = new DomainManager();
+            context.Add(_domainManager);
+            context.ServiceManager.StartServices();
         }
 
         [Test]
-        public void GetCommonAppBase_OneElement()
+        public void ServiceIsStarted()
         {
-            string[] assemblies = new string[] { path1 };
-
-            Assert.AreEqual(
-                TestPath("/test/bin/debug"),
-                DomainManager.GetCommonAppBase(assemblies));
-        }
-
-        [Test]
-        public void GetCommonAppBase_TwoElements_SameDirectory()
-        {
-            string[] assemblies = new string[] { path1, path2 };
-
-            Assert.AreEqual(
-                TestPath("/test/bin/debug"),
-                DomainManager.GetCommonAppBase(assemblies));
-        }
-
-        [Test]
-        public void GetCommonAppBase_TwoElements_DifferentDirectories()
-        {
-            string[] assemblies = new string[] { path1, path3 };
-
-            Assert.AreEqual(
-                TestPath("/test"),
-                DomainManager.GetCommonAppBase(assemblies));
-        }
-
-        [Test]
-        public void GetCommonAppBase_ThreeElements_DiferentDirectories()
-        {
-            string[] assemblies = new string[] { path1, path2, path3 };
-
-            Assert.AreEqual(
-                TestPath("/test"),
-                DomainManager.GetCommonAppBase(assemblies));
-        }
-
-        [Test]
-        public void UnloadUnloadedDomain()
-        {
-            AppDomain domain = AppDomain.CreateDomain("DomainManagerTests-domain");
-            AppDomain.Unload(domain);
-
-            DomainManager manager = new DomainManager();
-            manager.Unload(domain);
+            Assert.That(_domainManager.Status, Is.EqualTo(ServiceStatus.Started));
         }
 
         [Test, Platform("Linux,Net", Reason = "get_SetupInformation() fails on Windows+Mono")]
-        public void AppDomainSetUpCorrect()
+        public void CanCreateDomain()
         {
-            ServiceContext context = new ServiceContext();
-            context.Add(new SettingsService());
-            var domainManager = new DomainManager();
-            context.Add(domainManager);
-            context.ServiceManager.InitializeServices();
+            var domain = _domainManager.CreateDomain(_package);
 
-            string mockDll = MockAssembly.AssemblyPath;
-            AppDomainSetup setup = domainManager.CreateAppDomainSetup(new TestPackage(mockDll));
+            Assert.NotNull(domain);
+            var setup = domain.SetupInformation;
 
             Assert.That(setup.ApplicationName, Does.StartWith("Tests_"));
-            Assert.That(setup.ApplicationBase, Is.SamePath(Path.GetDirectoryName(mockDll)), "ApplicationBase");
-            Assert.That( 
-                Path.GetFileName( setup.ConfigurationFile ),
-                Is.EqualTo("mock-nunit-assembly.exe.config").IgnoreCase,
+            Assert.That(setup.ApplicationBase, Is.SamePath(Path.GetDirectoryName(MockAssembly.AssemblyPath)), "ApplicationBase");
+            Assert.That(
+                Path.GetFileName(setup.ConfigurationFile),
+                Is.EqualTo("mock-assembly.exe.config").IgnoreCase,
                 "ConfigurationFile");
-            Assert.AreEqual( null, setup.PrivateBinPath, "PrivateBinPath" );
-            Assert.That(setup.ShadowCopyDirectories, Is.SamePath(Path.GetDirectoryName(mockDll)), "ShadowCopyDirectories" );
+            Assert.AreEqual(null, setup.PrivateBinPath, "PrivateBinPath");
+            Assert.That(setup.ShadowCopyFiles, Is.Null.Or.EqualTo("false"));
+            //Assert.That(setup.ShadowCopyDirectories, Is.SamePath(Path.GetDirectoryName(MockAssembly.AssemblyPath)), "ShadowCopyDirectories" );
         }
 
-        /// <summary>
-        /// Take a valid Linux filePath and make a valid windows filePath out of it
-        /// if we are on Windows. Change slashes to backslashes and, if the
-        /// filePath starts with a slash, add C: in front of it.
-        /// </summary>
-        private static string TestPath(string path)
+        [Test, Platform("Linux,Net", Reason = "get_SetupInformation() fails on Windows+Mono")]
+        public void CanCreateDomainWithApplicationBaseSpecified()
         {
-            if (Path.DirectorySeparatorChar != '/')
+            string assemblyDir = Path.GetDirectoryName(_package.FullName);
+            string basePath = Path.GetDirectoryName(Path.GetDirectoryName(assemblyDir));
+            string relPath = assemblyDir.Substring(basePath.Length + 1);
+
+            _package.Settings["BasePath"] = basePath;
+            var domain = _domainManager.CreateDomain(_package);
+
+            Assert.NotNull(domain);
+            var setup = domain.SetupInformation;
+
+            Assert.That(setup.ApplicationName, Does.StartWith("Tests_"));
+            Assert.That(setup.ApplicationBase, Is.SamePath(basePath), "ApplicationBase");
+            Assert.That(
+                Path.GetFileName(setup.ConfigurationFile),
+                Is.EqualTo("mock-assembly.exe.config").IgnoreCase,
+                "ConfigurationFile");
+            Assert.That(setup.PrivateBinPath, Is.SamePath(relPath), "PrivateBinPath");
+            Assert.That(setup.ShadowCopyFiles, Is.Null.Or.EqualTo("false"));
+        }
+
+        [Test]
+        public void CanUnloadDomain()
+        {
+            var domain = _domainManager.CreateDomain(_package);
+            _domainManager.Unload(domain);
+
+            CheckDomainIsUnloaded(domain);
+        }
+
+        [Test]
+        public void UnloadingTwiceDoesNoHarm()
+        {
+            var domain = _domainManager.CreateDomain(_package);
+            _domainManager.Unload(domain);
+            _domainManager.Unload(domain);
+
+            CheckDomainIsUnloaded(domain);
+        }
+
+        #region Helper Methods
+
+        private void CheckDomainIsUnloaded(AppDomain domain)
+        {
+            // HACK: Either the Assert will succeed or the
+            // exception should be thrown.
+            bool unloaded = false;
+
+            try
             {
-                path = path.Replace('/', Path.DirectorySeparatorChar);
-                if (path[0] == Path.DirectorySeparatorChar)
-                    path = "C:" + path;
+                unloaded = domain.IsFinalizingForUnload();
+            }
+            catch (AppDomainUnloadedException)
+            {
+                unloaded = true;
             }
 
-            return path;
+            Assert.True(unloaded, "Domain was not unloaded");
         }
+
+        #endregion
     }
 }

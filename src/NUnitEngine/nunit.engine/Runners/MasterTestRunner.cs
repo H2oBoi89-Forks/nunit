@@ -22,8 +22,11 @@
 // ***********************************************************************
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Reflection;
 using System.Xml;
 using NUnit.Common;
 using NUnit.Engine.Internal;
@@ -34,9 +37,19 @@ namespace NUnit.Engine.Runners
     {
         private ITestEngineRunner _realRunner;
 
-        public MasterTestRunner(ServiceContext services, TestPackage package) : base(services, package) { }
+        public MasterTestRunner(IServiceLocator services, TestPackage package)
+            : base(services, package)
+        {
+            RuntimeService = Services.GetService<IRuntimeFrameworkService>();
+        }
+
+        #region Properties
 
         public bool IsTestRunning { get; private set; }
+
+        private IRuntimeFrameworkService RuntimeService { get; set; }
+
+        #endregion
 
         #region AbstractTestRunner Overrides
 
@@ -57,13 +70,35 @@ namespace NUnit.Engine.Runners
         /// <returns>A TestEngineResult.</returns>
         protected override TestEngineResult LoadPackage()
         {
-            // Last chance to catch invalid settings in package, 
+            // Last chance to catch invalid settings in package,
             // in case the client runner missed them.
             ValidatePackageSettings();
 
-            _realRunner = Services.TestRunnerFactory.MakeTestRunner(TestPackage);
+            // Some files in the top level package may be projects.
+            // Expand them so that they contain subprojects for
+            // each contained assembly.
+            ExpandProjects();
+
+            // Use SelectRuntimeFramework for its side effects.
+            // Info will be left behind in the package about
+            // each contained assembly, which will subsequently
+            // be used to determine how to run the assembly.
+            RuntimeService.SelectRuntimeFramework(TestPackage);
+
+            _realRunner = TestRunnerFactory.MakeTestRunner(TestPackage);
 
             return _realRunner.Load().Aggregate(TEST_RUN_ELEMENT, TestPackage.Name, TestPackage.FullName);
+        }
+
+        private void ExpandProjects()
+        {
+            foreach (var package in TestPackage.SubPackages)
+            {
+                string packageName = package.FullName;
+
+                if (File.Exists(packageName) && ProjectService.CanLoadFrom(packageName))
+                        ProjectService.ExpandProjectPackage(package);
+            }
         }
 
         /// <summary>
@@ -105,7 +140,12 @@ namespace NUnit.Engine.Runners
 
             TestEngineResult result = _realRunner.Run(listener, filter).Aggregate("test-run", TestPackage.Name, TestPackage.FullName);
 
-            result.Xml.InsertEnvironmentElement();
+            // These are inserted in reverse order, since each is added as the first child.
+            InsertFilterElement(result.Xml, filter);
+            InsertCommandLineElement(result.Xml);
+
+            result.Xml.AddAttribute("engine-version", Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            result.Xml.AddAttribute("clr-version", Environment.Version.ToString());
 
             double duration = (double)(Stopwatch.GetTimestamp() - startTicks) / Stopwatch.Frequency;
             result.Xml.AddAttribute("start-time", XmlConvert.ToString(startTime, "u"));
@@ -134,8 +174,13 @@ namespace NUnit.Engine.Runners
         /// </summary>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _realRunner != null)
-                _realRunner.Dispose();
+            if (!_disposed)
+            {
+                base.Dispose(disposing);
+
+                if (disposing && _realRunner != null)
+                    _realRunner.Dispose();
+            }
         }
 
         #endregion
@@ -149,7 +194,7 @@ namespace NUnit.Engine.Runners
 
         /// <summary>
         /// Load a TestPackage for possible execution. The 
-        /// explicit implemenation returns an ITestEngineResult
+        /// explicit implementation returns an ITestEngineResult
         /// for consumption by clients.
         /// </summary>
         /// <returns>An XmlNode representing the loaded assembly.</returns>
@@ -190,9 +235,7 @@ namespace NUnit.Engine.Runners
         /// <returns></returns>
         ITestRun ITestRunner.RunAsync(ITestEventListener listener, TestFilter filter)
         {
-            var testRun = new TestRun(this);
-            testRun.Start(listener, filter);
-            return testRun;
+            return RunAsync(listener, filter);
         }
 
         /// <summary>
@@ -217,18 +260,63 @@ namespace NUnit.Engine.Runners
             var frameworkSetting = TestPackage.GetSetting(PackageSettings.RuntimeFramework, "");
             if (frameworkSetting.Length > 0)
             {
+                // Check requested framework is actually available
                 var runtimeService = Services.GetService<IRuntimeFrameworkService>();
                 if (!runtimeService.IsAvailable(frameworkSetting))
                     throw new NUnitEngineException(string.Format("The requested framework {0} is unknown or not available.", frameworkSetting));
 
+                // If running in process, check requested framework is compatible
                 var processModel = TestPackage.GetSetting(PackageSettings.ProcessModel, "Default");
                 if (processModel.ToLower() == "single")
                 {
-                    var currentFramework = RuntimeFramework.CurrentFramework.ToString();
-                    if (currentFramework != frameworkSetting)
+                    var currentFramework = RuntimeFramework.CurrentFramework;
+                    var requestedFramework = RuntimeFramework.Parse(frameworkSetting);
+                    if (!currentFramework.Supports(requestedFramework))
                         throw new NUnitEngineException(string.Format(
                             "Cannot run {0} framework in process already running {1}.", frameworkSetting, currentFramework));
                 }
+            }
+        }
+
+        private static void InsertCommandLineElement(XmlNode resultNode)
+        {
+            var doc = resultNode.OwnerDocument;
+
+            XmlNode cmd = doc.CreateElement("command-line");
+            resultNode.InsertAfter(cmd, null);
+
+            var cdata = doc.CreateCDataSection(Environment.CommandLine);
+            cmd.AppendChild(cdata);
+        }
+
+        private static void InsertSettingsElement(XmlNode resultNode, IDictionary<string, object> settings)
+        {
+            var doc = resultNode.OwnerDocument;
+
+            XmlNode settingsNode = doc.CreateElement("settings");
+            resultNode.InsertAfter(settingsNode, null);
+
+            foreach (string name in settings.Keys)
+            {
+                string value = settings[name].ToString();
+                XmlNode settingNode = doc.CreateElement("setting");
+                settingNode.AddAttribute("name", name);
+                settingNode.AddAttribute("value", value);
+                settingsNode.AppendChild(settingNode);
+            }
+        }
+
+        private static void InsertFilterElement(XmlNode resultNode, TestFilter filter)
+        {
+            // Convert the filter to an XmlNode
+            var tempNode = XmlHelper.CreateXmlNode(filter.Text);
+
+            // Don't include it if it's an empty filter
+            if (tempNode.ChildNodes.Count > 0)
+            {
+                var doc = resultNode.OwnerDocument;
+                var filterElement = doc.ImportNode(tempNode, true);
+                resultNode.InsertAfter(filterElement, null);
             }
         }
 

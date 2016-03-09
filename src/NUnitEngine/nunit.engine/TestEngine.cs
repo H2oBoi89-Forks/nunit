@@ -24,7 +24,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using Mono.Addins;
+using System.Reflection;
 using NUnit.Engine.Internal;
 using NUnit.Engine.Services;
 
@@ -64,10 +64,10 @@ namespace NUnit.Engine
         {
             get
             {
-                if(!this.Services.ServiceManager.ServicesInitialized)
+                if(!Services.ServiceManager.ServicesInitialized)
                     Initialize();
 
-                return this.Services;
+                return Services;
             }
         }
 
@@ -84,34 +84,30 @@ namespace NUnit.Engine
         /// </summary>
         public void Initialize()
         {
-            if (!AddinManager.IsInitialized)
-            {
-                AddinManager.Initialize(NUnitConfiguration.ApplicationDirectory);
-                AddinManager.Registry.Update(null);
-            }
-
             SettingsService settingsService = new SettingsService(true);
 
             if(InternalTraceLevel == InternalTraceLevel.Default)
                 InternalTraceLevel = settingsService.GetSetting("Options.InternalTraceLevel", InternalTraceLevel.Off);
 
-            if(InternalTraceLevel != InternalTraceLevel.Off)
+            if(InternalTraceLevel != InternalTraceLevel.Off && !InternalTrace.Initialized)
             {
                 var logName = string.Format("InternalTrace.{0}.log", Process.GetCurrentProcess().Id);
                 InternalTrace.Initialize(Path.Combine(WorkDirectory, logName), InternalTraceLevel);
             }
 
-            this.Services.Add(settingsService);
-            this.Services.Add(new RecentFilesService());
-            this.Services.Add(new DomainManager());
-            this.Services.Add(new ProjectService());
-            this.Services.Add(new RuntimeFrameworkService());
-            this.Services.Add(new DefaultTestRunnerFactory());
-            this.Services.Add(new DriverService());
-            this.Services.Add(new TestAgency());
-            this.Services.Add(new ResultService());
+            Services.Add(settingsService);
+            Services.Add(new DomainManager());
+            Services.Add(new ExtensionService());
+            Services.Add(new DriverService());
+            Services.Add(new RecentFilesService());
+            Services.Add(new ProjectService());
+            Services.Add(new RuntimeFrameworkService());
+            Services.Add(new DefaultTestRunnerFactory());
+            Services.Add(new TestAgency());
+            Services.Add(new ResultService());
+            Services.Add(new TestFilterService());
 
-            this.Services.ServiceManager.InitializeServices();
+            Services.ServiceManager.StartServices();
         }
 
         /// <summary>
@@ -122,19 +118,34 @@ namespace NUnit.Engine
         /// <returns>An ITestRunner.</returns>
         public ITestRunner GetRunner(TestPackage package)
         {
-            if(!this.Services.ServiceManager.ServicesInitialized)
+            if(!Services.ServiceManager.ServicesInitialized)
                 Initialize();
 
-            return new Runners.MasterTestRunner(this.Services, package);
+            return new Runners.MasterTestRunner(Services, package);
         }
 
         #endregion
 
         #region IDisposable Members
 
+        private bool _disposed = false;
+
         public void Dispose()
         {
-            Services.ServiceManager.StopAllServices();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+            Services.ServiceManager.StopServices();
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                    Services.ServiceManager.Dispose();
+
+                _disposed = true;
+            }
         }
 
         #endregion

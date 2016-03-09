@@ -24,6 +24,7 @@
 using System;
 using System.Reflection;
 using System.Collections.Generic;
+using NUnit.Framework.Compatibility;
 using NUnit.Framework.Interfaces;
 
 namespace NUnit.Framework.Internal.Execution
@@ -45,15 +46,21 @@ namespace NUnit.Framework.Internal.Execution
         {
             // Handle skipped tests
             if (suite.RunState != RunState.Runnable && suite.RunState != RunState.Explicit)
-                return new SkipCommand(suite);
+                return MakeSkipCommand(suite);
 
             // Build the OneTimeSetUpCommand itself
             TestCommand command = new OneTimeSetUpCommand(suite, setUpTearDown, actions);
 
             // Prefix with any IApplyToContext items from attributes
-            if (suite.FixtureType != null)
+            if (suite.TypeInfo != null)
             {
-                IApplyToContext[] changes = (IApplyToContext[])suite.FixtureType.GetCustomAttributes(typeof(IApplyToContext), true);
+                IApplyToContext[] changes = suite.TypeInfo.GetCustomAttributes<IApplyToContext>(true);
+                if (changes.Length > 0)
+                    command = new ApplyChangesToContextCommand(command, changes);
+            }
+            if (suite.Method!=null)
+            {
+                IApplyToContext[] changes = suite.Method.GetCustomAttributes<IApplyToContext>(true);
                 if (changes.Length > 0)
                     command = new ApplyChangesToContextCommand(command, changes);
             }
@@ -84,14 +91,11 @@ namespace NUnit.Framework.Internal.Execution
         /// <returns></returns>
         public static TestCommand MakeTestCommand(TestMethod test)
         {
-            if (test.RunState != RunState.Runnable && test.RunState != RunState.Explicit)
-                return new SkipCommand(test);
-
             // Command to execute test
             TestCommand command = new TestMethodCommand(test);
 
             // Add any wrappers to the TestMethodCommand
-            foreach (IWrapTestMethod wrapper in test.Method.GetCustomAttributes(typeof(IWrapTestMethod), true))
+            foreach (IWrapTestMethod wrapper in test.Method.GetCustomAttributes<IWrapTestMethod>(true))
                 command = wrapper.Wrap(command);
 
             // Wrap in TestActionCommand
@@ -100,12 +104,12 @@ namespace NUnit.Framework.Internal.Execution
             // Wrap in SetUpTearDownCommand
             command = new SetUpTearDownCommand(command);
 
-            // Add wrapppers that apply before setup and after teardown
-            foreach (ICommandWrapper decorator in test.Method.GetCustomAttributes(typeof(IWrapSetUpTearDown), true))
+            // Add wrappers that apply before setup and after teardown
+            foreach (ICommandWrapper decorator in test.Method.GetCustomAttributes<IWrapSetUpTearDown>(true))
                 command = decorator.Wrap(command);
 
             // Add command to set up context using attributes that implement IApplyToContext
-            IApplyToContext[] changes = (IApplyToContext[])test.Method.GetCustomAttributes(typeof(IApplyToContext), true);
+            IApplyToContext[] changes = test.Method.GetCustomAttributes<IApplyToContext>(true);
             if (changes.Length > 0)
                 command = new ApplyChangesToContextCommand(command, changes);
 
@@ -113,11 +117,20 @@ namespace NUnit.Framework.Internal.Execution
         }
 
         /// <summary>
+        /// Creates a command for skipping a test. The result returned will
+        /// depend on the test RunState.
+        /// </summary>
+        public static SkipCommand MakeSkipCommand(Test test)
+        {
+            return new SkipCommand(test);
+        }
+
+        /// <summary>
         /// Builds the set up tear down list.
         /// </summary>
         /// <param name="fixtureType">Type of the fixture.</param>
-        /// <param name="setUpType">Type of the set up.</param>
-        /// <param name="tearDownType">Type of the tear down.</param>
+        /// <param name="setUpType">Type of the set up attribute.</param>
+        /// <param name="tearDownType">Type of the tear down attribute.</param>
         /// <returns>A list of SetUpTearDownItems</returns>
         public static List<SetUpTearDownItem> BuildSetUpTearDownList(Type fixtureType, Type setUpType, Type tearDownType)
         {
@@ -126,13 +139,13 @@ namespace NUnit.Framework.Internal.Execution
 
             var list = new List<SetUpTearDownItem>();
 
-            while (fixtureType != null && fixtureType != typeof(object))
+            while (fixtureType != null && !fixtureType.Equals(typeof(object)))
             {
                 var node = BuildNode(fixtureType, setUpMethods, tearDownMethods);
                 if (node.HasMethods)
                     list.Add(node);
 
-                fixtureType = fixtureType.BaseType;
+                fixtureType = fixtureType.GetTypeInfo().BaseType;
             }
 
             return list;

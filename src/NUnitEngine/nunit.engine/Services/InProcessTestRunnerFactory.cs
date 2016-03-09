@@ -21,6 +21,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
+using System;
 using NUnit.Common;
 using NUnit.Engine.Internal;
 using NUnit.Engine.Runners;
@@ -32,7 +33,7 @@ namespace NUnit.Engine.Services
     /// runner for a given package to be loaded and run within the
     /// same process.
     /// </summary>
-    public class InProcessTestRunnerFactory : ITestRunnerFactory, IService
+    public class InProcessTestRunnerFactory : Service, ITestRunnerFactory
     {
         #region ITestRunnerFactory Members
 
@@ -54,13 +55,12 @@ namespace NUnit.Engine.Services
             {
                 default:
                 case DomainUsage.Default:
-                    if (package.TestFiles.Count > 1)
+                    if (package.SubPackages.Count > 1)
                         return new MultipleTestDomainRunner(this.ServiceContext, package);
                     else
                         return new TestDomainRunner(this.ServiceContext, package);
 
                 case DomainUsage.Multiple:
-                    package.Settings.Remove("DomainUsage");
                     return new MultipleTestDomainRunner(ServiceContext, package);
 
                 case DomainUsage.None:
@@ -74,25 +74,6 @@ namespace NUnit.Engine.Services
         public virtual bool CanReuse(ITestEngineRunner runner, TestPackage package)
         {
             return false;
-        }
-
-        #endregion
-
-        #region IService Members
-
-        private ServiceContext services;
-        public ServiceContext ServiceContext 
-        {
-            get { return services; }
-            set { services = value; }
-        }
-
-        public void InitializeService()
-        {
-        }
-
-        public void UnloadService()
-        {
         }
 
         #endregion

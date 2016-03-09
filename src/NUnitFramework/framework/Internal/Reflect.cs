@@ -25,6 +25,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using NUnit.Framework.Compatibility;
+
+#if PORTABLE
+using System.Linq;
+#endif
 
 namespace NUnit.Framework.Internal
 {
@@ -115,18 +120,22 @@ namespace NUnit.Framework.Internal
         /// <returns>True if found, otherwise false</returns>
         public static bool HasMethodWithAttribute(Type fixtureType, Type attributeType)
         {
+#if PORTABLE
+            return fixtureType.GetMethods(AllMembers | BindingFlags.FlattenHierarchy)
+                .Any(m => m.GetCustomAttributes(false).Any(a => attributeType.IsAssignableFrom(a.GetType())));
+#else
+
 #if NETCF
             if (fixtureType.ContainsGenericParameters)
                 return false;
 #endif
-
             foreach (MethodInfo method in fixtureType.GetMethods(AllMembers | BindingFlags.FlattenHierarchy))
             {
                 if (method.IsDefined(attributeType, false))
                     return true;
             }
-
             return false;
+#endif
         }
 
         #endregion
@@ -210,18 +219,20 @@ namespace NUnit.Framework.Internal
                 {
                     return method.Invoke(fixture, args);
                 }
+#if !PORTABLE
+                catch (System.Threading.ThreadAbortException)
+                {
+                    // No need to wrap or rethrow ThreadAbortException
+                    return null;
+                }
+#endif
+                catch (TargetInvocationException e)
+                {
+                    throw new NUnitException("Rethrown", e.InnerException);
+                }
                 catch (Exception e)
                 {
-#if !PORTABLE
-                    // No need to wrap or rethrow ThreadAbortException
-                    if (!(e is System.Threading.ThreadAbortException))
-#endif
-                    {
-                        if (e is TargetInvocationException)
-                            throw new NUnitException("Rethrown", e.InnerException);
-                        else
-                            throw new NUnitException("Rethrown", e);
-                    }
+                    throw new NUnitException("Rethrown", e);
                 }
             }
 

@@ -21,6 +21,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ***********************************************************************
 
+using System;
 using System.Collections.Generic;
 using NUnit.Common;
 using NUnit.Engine.Internal;
@@ -35,9 +36,9 @@ namespace NUnit.Engine.Runners
     {
         // The runners created by the derived class will (at least at the time
         // of writing this comment) be either TestDomainRunners or ProcessRunners.
-        private readonly List<ITestEngineRunner> _runners = new List<ITestEngineRunner>();
+        protected readonly List<ITestEngineRunner> _runners = new List<ITestEngineRunner>();
 
-        public AggregatingTestRunner(ServiceContext services, TestPackage package) : base(services, package) { }
+        public AggregatingTestRunner(IServiceLocator services, TestPackage package) : base(services, package) { }
 
         #region AbstractTestRunner Overrides
 
@@ -67,21 +68,9 @@ namespace NUnit.Engine.Runners
         /// <returns>A TestEngineResult.</returns>
         protected override TestEngineResult LoadPackage()
         {
-            var packages = new List<TestPackage>();
-
-            foreach (string testFile in TestPackage.TestFiles)
-            {
-                var subPackage = new TestPackage(testFile);
-                if (Services.ProjectService.CanLoadFrom(testFile))
-                    Services.ProjectService.ExpandProjectPackage(subPackage);
-                foreach (string key in TestPackage.Settings.Keys)
-                    subPackage.Settings[key] = TestPackage.Settings[key];
-                packages.Add(subPackage);
-            }
-
             var results = new List<TestEngineResult>();
 
-            foreach (TestPackage subPackage in packages)
+            foreach (var subPackage in TestPackage.SubPackages)
             {
                 var runner = CreateRunner(subPackage);
                 _runners.Add(runner);
@@ -130,11 +119,35 @@ namespace NUnit.Engine.Runners
 
             bool disposeRunners = TestPackage.GetSetting(PackageSettings.DisposeRunners, false);
 
-            foreach (ITestEngineRunner runner in _runners)
+            int levelOfParallelism = GetLevelOfParallelism();
+
+            if (levelOfParallelism <= 1 || _runners.Count <= 1)
             {
-                results.Add(runner.Run(listener, filter));
-                if (disposeRunners) runner.Dispose();
+                foreach (ITestEngineRunner runner in _runners)
+                {
+                    results.Add(runner.Run(listener, filter));
+                    if (disposeRunners) runner.Dispose();
+                }
             }
+            else
+            {
+                var workerPool = new ParallelTaskWorkerPool(levelOfParallelism);
+                var tasks = new List<TestExecutionTask>();
+
+                foreach (ITestEngineRunner runner in _runners)
+                {
+                    var task = new TestExecutionTask(runner, listener, filter, disposeRunners);
+                    tasks.Add(task);
+                    workerPool.Enqueue(task);
+                }
+
+                workerPool.Start();
+                workerPool.WaitAll();
+
+                foreach (var task in tasks)
+                    results.Add(task.Result());
+            }
+
             if (disposeRunners) _runners.Clear();
 
             TestEngineResult result = ResultHelper.Merge(results);
@@ -174,7 +187,12 @@ namespace NUnit.Engine.Runners
 
         protected virtual ITestEngineRunner CreateRunner(TestPackage package)
         {
-            return Services.TestRunnerFactory.MakeTestRunner(package);
+            return TestRunnerFactory.MakeTestRunner(package);
+        }
+
+        protected virtual int GetLevelOfParallelism()
+        {
+            return 1;
         }
     }
 }

@@ -40,9 +40,9 @@ namespace NUnit.Framework.Constraints
             stringRepresentation = "<equal 4>";
         }
 
-        private object[] SuccessData = new object[] {4, 4.0f, 4.0d, 4.0000m};
+        static object[] SuccessData = new object[] {4, 4.0f, 4.0d, 4.0000m};
 
-        private object[] FailureData = new object[]
+        static object[] FailureData = new object[]
             {
                 new TestCaseData(5, "5"),
                 new TestCaseData(null, "null"),
@@ -179,7 +179,80 @@ namespace NUnit.Framework.Constraints
 
         #region DateTimeOffsetEquality
 
-#if !NETCF
+#if !NETCF && !PORTABLE
+
+        public class DateTimeOffsetShouldBeSame
+        {
+      
+            [Datapoints]
+            public static readonly DateTimeOffset[] sameDateTimeOffsets = 
+                {
+                    new DateTimeOffset(new DateTime(2014, 1, 30, 12, 34, 56), new TimeSpan(6, 15, 0)), 
+                    new DateTimeOffset(new DateTime(2014, 1, 30, 9, 19, 56), new TimeSpan(3, 0, 0)),
+                    new DateTimeOffset(new DateTime(2014, 1, 30, 9, 19, 56), new TimeSpan(3, 1, 0)),
+                    new DateTimeOffset(new DateTime(2014, 1, 30, 9, 19, 55), new TimeSpan(3, 0, 0)),
+                    new DateTimeOffset(new DateTime(2014, 1, 30, 9, 19, 55), new TimeSpan(3, 50, 0))
+                };
+
+            [Theory]
+            public void PositiveEqualityTest(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That(value1 == value2);
+
+                Assert.That(value1, Is.EqualTo(value2));
+            }
+
+            [Theory]
+            public void NegativeEqualityTest(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That(value1 != value2);
+
+                Assert.That(value1, Is.Not.EqualTo(value2));
+            }
+
+            [Theory]
+            public void PositiveEqualityTestWithTolerance(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That((value1 - value2).Duration() <= new TimeSpan(0, 1, 0));
+
+                Assert.That(value1, Is.EqualTo(value2).Within(1).Minutes);
+            }
+
+            [Theory]
+            public void NegativeEqualityTestWithTolerance(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That((value1 - value2).Duration() > new TimeSpan(0, 1, 0));
+                
+                Assert.That(value1, Is.Not.EqualTo(value2).Within(1).Minutes);
+            }
+
+            [Theory]
+            public void NegativeEqualityTestWithToleranceAndWithSameOffset(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That((value1 - value2).Duration() > new TimeSpan(0, 1, 0));
+                
+                Assert.That(value1, Is.Not.EqualTo(value2).Within(1).Minutes.WithSameOffset);
+            }
+
+            [Theory]
+            public void PositiveEqualityTestWithToleranceAndWithSameOffset(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That((value1 - value2).Duration() <= new TimeSpan(0, 1, 0));
+                Assume.That(value1.Offset == value2.Offset);
+
+                Assert.That(value1, Is.EqualTo(value2).Within(1).Minutes.WithSameOffset);
+            }
+
+            [Theory]
+            public void NegativeEqualityTestWithinToleranceAndWithSameOffset(DateTimeOffset value1, DateTimeOffset value2)
+            {
+                Assume.That((value1 - value2).Duration() <= new TimeSpan(0, 1, 0));
+                Assume.That(value1.Offset != value2.Offset);
+
+                Assert.That(value1, Is.Not.EqualTo(value2).Within(1).Minutes.WithSameOffset);
+            }
+        }
+
         public class DateTimeOffSetEquality
         {
             [Test]
@@ -285,7 +358,7 @@ namespace NUnit.Framework.Constraints
                                 new Dictionary<int, int> {{0, 0}, {2, 2}, {1, 1}});
             }
 
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !PORTABLE
             [Test]
             public void CanMatchHashtables_SameOrder()
             {

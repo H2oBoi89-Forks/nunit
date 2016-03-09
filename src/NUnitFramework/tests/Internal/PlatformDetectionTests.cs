@@ -109,9 +109,8 @@ namespace NUnit.Framework.Internal
                 new OSPlatform( PlatformID.Win32Windows, new Version( 4, 90 ) ),
                 "WinMe,Win32Windows,Win32,Win" );
         }
-
-        // WinCE isn't defined in .NET 1.0.
-        [Test, Platform(Exclude="Net-1.0")]
+        
+        [Test]
         public void DetectWinCE()
         {
             PlatformID winCE = (PlatformID)Enum.Parse(typeof(PlatformID), "WinCE", false);
@@ -233,15 +232,30 @@ namespace NUnit.Framework.Internal
         }
 
         [Test]
+        public void DetectWindows10()
+        {
+            CheckOSPlatforms(
+                new OSPlatform(PlatformID.Win32NT, new Version(10, 0), OSPlatform.ProductType.WorkStation),
+                "Win10,Windows10,Win32NT,Win32,Win");
+        }
+
+        [Test]
+        public void DetectWindowsServer()
+        {
+            CheckOSPlatforms(
+                new OSPlatform(PlatformID.Win32NT, new Version(10, 0), OSPlatform.ProductType.Server),
+                "WindowsServer10,Win32NT,Win32,Win");
+        }
+
+        [Test]
         public void DetectUnixUnderMicrosoftDotNet()
         {
             CheckOSPlatforms(
                 new OSPlatform(OSPlatform.UnixPlatformID_Microsoft, new Version(0,0)),
                 "UNIX,Linux");
         }
-
-        // This throws under Microsoft .Net due to the invlaid enumeration value of 128
-        [Test, Platform(Exclude="Net")]
+        
+        [Test]
         public void DetectUnixUnderMono()
         {
             CheckOSPlatforms(
@@ -472,17 +486,17 @@ namespace NUnit.Framework.Internal
 
             // This test verifies that the two labels are known,
             // do not cause an error and return consistent results.
-            bool is32Bit = helper.IsPlatformSupported(attr32);
-            bool is64Bit = helper.IsPlatformSupported(attr64);
-            Assert.False(is32Bit & is64Bit, "Cannot be both 32 and 64 bit");
+            bool is32BitProcess = helper.IsPlatformSupported(attr32);
+            bool is64BitProcess = helper.IsPlatformSupported(attr64);
+            Assert.False(is32BitProcess & is64BitProcess, "Process cannot be both 32 and 64 bit");
 
-#if NET_4_0 || NET_4_5
+#if NET_4_0 || NET_4_5 || PORTABLE
             // For .NET 4.0 and 4.5, we can check further
-            Assert.That(is64Bit, Is.EqualTo(Environment.Is64BitProcess));
+            Assert.That(is64BitProcess, Is.EqualTo(Environment.Is64BitProcess));
 #endif
         }
 
-#if NET_4_0 || NET_4_5
+#if NET_4_0 || NET_4_5 || PORTABLE
         [Test]
         public void PlatformAttribute_OperatingSystemBitNess()
         {
@@ -490,12 +504,9 @@ namespace NUnit.Framework.Internal
             PlatformAttribute attr64 = new PlatformAttribute("64-Bit-OS");
             PlatformHelper helper = new PlatformHelper();
 
-            // This test verifies that the two labels are known,
-            // do not cause an error and return consistent results.
-            bool is32Bit = helper.IsPlatformSupported(attr32);
-            bool is64Bit = helper.IsPlatformSupported(attr64);
-            Assert.False(is32Bit & is64Bit, "Cannot be both 32 bit and 64 bit");
-            Assert.That(is64Bit, Is.EqualTo(Environment.Is64BitProcess));
+            bool is64BitOS = Environment.Is64BitOperatingSystem;
+            Assert.That(helper.IsPlatformSupported(attr32), Is.Not.EqualTo(is64BitOS));
+            Assert.That(helper.IsPlatformSupported(attr64), Is.EqualTo(is64BitOS));
         }
 #endif
     }

@@ -22,6 +22,8 @@
 // ***********************************************************************
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using NUnit.TestUtilities;
 
@@ -88,9 +90,12 @@ namespace NUnit.Framework.Constraints
         [Test]
         public void SameDirectoriesAreEqual()
         {
-            var one = new DirectoryInfo(Env.DocumentFolder);
-            var two = new DirectoryInfo(Env.DocumentFolder);
-            Assert.That(comparer.AreEqual(one, two, ref tolerance));
+            using (var testDir = new TestDirectory())
+            {
+                var one = new DirectoryInfo(testDir.Directory.FullName);
+                var two = new DirectoryInfo(testDir.Directory.FullName);
+                Assert.That(comparer.AreEqual(one, two, ref tolerance));
+            }
         }
 
         [Test]
@@ -160,6 +165,150 @@ namespace NUnit.Framework.Constraints
 
             Assert.IsFalse(comparer.AreEqual(x, y, ref tolerance));
         }
+
+        [Test]
+        public void ImplementingIEquatableDirectlyOnTheClass()
+        {
+            var obj1 = new EquatableObject { SomeProperty = 1 };
+            var obj2 = new EquatableObject { SomeProperty = 1 };
+
+            var n = new NUnitEqualityComparer();
+            var tolerance = Tolerance.Exact;
+            Assert.That(n.AreEqual(obj1, obj2, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj2, obj1, ref tolerance), Is.True);
+        }
+
+        [Test]
+        public void ImplementingIEquatableOnABaseClassOrInterface()
+        {
+            var obj1 = new InheritedEquatableObject { SomeProperty = 1 };
+            var obj2 = new InheritedEquatableObject { SomeProperty = 1 };
+
+            var n = new NUnitEqualityComparer();
+            var tolerance = Tolerance.Exact;
+            Assert.That(n.AreEqual(obj1, obj2, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj2, obj1, ref tolerance), Is.True);
+        }
+
+        [Test]
+        public void ImplementingIEquatableOnABaseClassOrInterfaceThroughInterface()
+        {
+            IEquatableObject obj1 = new InheritedEquatableObject { SomeProperty = 1 };
+            IEquatableObject obj2 = new InheritedEquatableObject { SomeProperty = 1 };
+
+            var n = new NUnitEqualityComparer();
+            var tolerance = Tolerance.Exact;
+            Assert.That(n.AreEqual(obj1, obj2, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj2, obj1, ref tolerance), Is.True);
+        }
+
+        [Test]
+        public void CanHandleMultipleImplementationsOfIEquatable()
+        {
+            IEquatableObject obj1 = new InheritedEquatableObject { SomeProperty = 1 };
+            IEquatableObject obj2 = new MultipleIEquatables { SomeProperty = 1 };
+            var obj3 = new EquatableObject { SomeProperty = 1 };
+
+            var n = new NUnitEqualityComparer();
+            var tolerance = Tolerance.Exact;
+            Assert.That(n.AreEqual(obj1, obj2, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj2, obj1, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj1, obj3, ref tolerance), Is.False);
+            Assert.That(n.AreEqual(obj3, obj1, ref tolerance), Is.False);
+            Assert.That(n.AreEqual(obj2, obj3, ref tolerance), Is.True);
+            Assert.That(n.AreEqual(obj3, obj2, ref tolerance), Is.True);
+        }
+
+        [Test]
+        public void IEnumeratorIsDisposed()
+        {
+            var enumeration = new EnumerableWithDisposeChecks<int>(new[] { 0, 1, 2, 3 });
+            Assert.True(comparer.AreEqual(enumeration, enumeration, ref tolerance));
+            Assert.That(enumeration.EnumeratorsDisposed);
+        }
+    }
+
+    internal class EnumerableWithDisposeChecks<T> : IEnumerable<T>
+    {
+        private readonly IEnumerable<T> data;
+        private readonly List<DisposableEnumerator<T>> enumerators = new List<DisposableEnumerator<T>>();
+
+        public EnumerableWithDisposeChecks(T[] data)
+        {
+            this.data = data;
+        }
+
+        public bool EnumeratorsDisposed
+        {
+            get
+            {
+                foreach (var disposableEnumerator in enumerators)
+                {
+                    if (!disposableEnumerator.Disposed)
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            var enumerator = new DisposableEnumerator<T>(data.GetEnumerator());
+            enumerators.Add(enumerator);
+            return enumerator;
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable<T>)this).GetEnumerator();
+        }
+    }
+
+    internal class DisposableEnumerator<T> : IEnumerator<T>
+    {
+        private bool disposedValue = false;
+        private readonly IEnumerator<T> enumerator;
+
+        public DisposableEnumerator(IEnumerator<T> enumerator)
+        {
+            this.enumerator = enumerator;
+        }
+
+        public bool Disposed { get { return disposedValue; } }
+
+        public T Current
+        {
+            get
+            {
+                return enumerator.Current;
+            }
+        }
+
+        object IEnumerator.Current
+        {
+            get
+            {
+                return enumerator.Current;
+            }
+        }
+
+        public bool MoveNext()
+        {
+            return enumerator.MoveNext();
+        }
+
+        public void Reset()
+        {
+            enumerator.Reset();
+        }
+
+        public void Dispose()
+        {
+            disposedValue = true;
+        }
+
     }
 
     public class NeverEqualIEquatableWithOverriddenAlwaysTrueEquals : IEquatable<NeverEqualIEquatableWithOverriddenAlwaysTrueEquals>
@@ -215,6 +364,47 @@ namespace NUnit.Framework.Constraints
         public bool Equals(IEquatableWithoutEqualsOverridden other)
         {
             return value.Equals(other.value);
+        }
+    }
+    
+    public class EquatableObject : IEquatable<EquatableObject>
+    {
+        public int SomeProperty { get; set; }
+        public bool Equals(EquatableObject other)
+        {
+            if (other == null)
+                return false;
+
+            return SomeProperty == other.SomeProperty;
+        }
+    }
+
+    public interface IEquatableObject : IEquatable<IEquatableObject>
+    {
+        int SomeProperty { get; set; }
+    }
+
+    public class InheritedEquatableObject : IEquatableObject
+    {
+        public int SomeProperty { get; set; }
+
+        public bool Equals(IEquatableObject other)
+        {
+            if (other == null)
+                return false;
+
+            return SomeProperty == other.SomeProperty;
+        }
+    }
+
+    public class MultipleIEquatables : InheritedEquatableObject, IEquatable<EquatableObject>
+    {
+        public bool Equals(EquatableObject other)
+        {
+            if (other == null)
+                return false;
+
+            return SomeProperty == other.SomeProperty;
         }
     }
 }
